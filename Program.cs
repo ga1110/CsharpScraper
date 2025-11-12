@@ -49,7 +49,7 @@ class Program
         using var writer = new StreamWriter(filename, false, System.Text.Encoding.UTF8);
         
         // Заголовки
-        await writer.WriteLineAsync("Title,Url,Category,Section,Author,PublishDate,Excerpt,ContentLength,TagCount,ViewCount,CommentCount,ImageUrl");
+        await writer.WriteLineAsync("Title,Url,Category,Author,PublishDate,ContentLength,CommentCount,ImageUrl");
         
         foreach (var article in articles)
         {
@@ -57,13 +57,9 @@ class Program
                 EscapeCsv(article.Title),
                 EscapeCsv(article.Url),
                 EscapeCsv(article.Category),
-                EscapeCsv(article.Section),
                 EscapeCsv(article.Author),
                 article.PublishDate?.ToString("yyyy-MM-dd") ?? "",
-                EscapeCsv(article.Excerpt),
                 article.Content?.Length ?? 0,
-                article.Tags.Count,
-                article.ViewCount?.ToString() ?? "",
                 article.CommentCount?.ToString() ?? "",
                 EscapeCsv(article.ImageUrl)
             );

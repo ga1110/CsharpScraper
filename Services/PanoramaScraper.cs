@@ -9,6 +9,7 @@ public class PanoramaScraper
 {
     private readonly HttpClient _httpClient;
     private readonly string _baseUrl = "https://panorama.pub/news";
+    private readonly string _rootUrl = "https://panorama.pub";
 
     public PanoramaScraper()
     {
@@ -23,8 +24,7 @@ public class PanoramaScraper
         var articles = new List<Article>();
         var visitedUrls = new HashSet<string>();
         
-        Console.WriteLine("Начинаю скрапинг сайта panorama.pub/news...");
-        Console.WriteLine("Начинаю с текущей даты и перехожу к предыдущим датам");
+        Console.WriteLine("Начинало скрапинга");
         Console.WriteLine();
         
         // Начинаем с текущей даты
@@ -175,7 +175,7 @@ public class PanoramaScraper
                             continue;
                         }
                         
-                        // Проверяем, что это ссылка на статью из раздела /news/
+                        // Проверяем, что это ссылка на статью из раздела 
                         if (IsArticleUrl(href))
                         {
                             var title = ExtractTitle(link);
@@ -184,8 +184,7 @@ public class PanoramaScraper
                                 articles.Add(new Article
                                 {
                                     Title = title,
-                                    Url = href,
-                                    Section = "Новости"
+                                    Url = href
                                 });
                             }
                         }
@@ -232,6 +231,29 @@ public class PanoramaScraper
                 }
             }
             
+            // Очищаем заголовок от рейтинга и других служебных данных
+            if (!string.IsNullOrEmpty(article.Title))
+            {
+                // Убираем "Рейтинг: число" в начале заголовка
+                article.Title = Regex.Replace(article.Title, @"^Рейтинг:\s*\d+\s+", "", RegexOptions.IgnoreCase);
+                
+                // Убираем лишние пробелы
+                article.Title = Regex.Replace(article.Title, @"\s+", " ").Trim();
+            }
+            
+            // Автор из метатегов
+            if (string.IsNullOrEmpty(article.Author))
+            {
+                var authorMeta = doc.DocumentNode.SelectSingleNode("//meta[@property='article:author']") ??
+                                 doc.DocumentNode.SelectSingleNode("//meta[@name='author']");
+                var authorValue = authorMeta?.GetAttributeValue("content", null);
+                if (!string.IsNullOrWhiteSpace(authorValue) &&
+                    !authorValue.Equals("ИА Панорама", StringComparison.OrdinalIgnoreCase))
+                {
+                    article.Author = CleanText(authorValue);
+                }
+            }
+
             // Основной контент статьи - пробуем разные селекторы
             var contentNodes = doc.DocumentNode.SelectNodes("//article//p") ??
                               doc.DocumentNode.SelectNodes("//div[contains(@class, 'content')]//p") ??
@@ -244,16 +266,10 @@ public class PanoramaScraper
             {
                 var contentParts = contentNodes
                     .Select(n => CleanText(n.InnerText))
-                    .Where(t => !string.IsNullOrEmpty(t) && t.Length > 20)
+                    .Where(t => !string.IsNullOrEmpty(t))
                     .ToList();
                 
                 article.Content = string.Join("\n\n", contentParts);
-                
-                // Первый абзац как excerpt
-                if (contentParts.Any())
-                {
-                    article.Excerpt = contentParts.First().Substring(0, Math.Min(300, contentParts.First().Length));
-                }
             }
             else
             {
@@ -266,7 +282,6 @@ public class PanoramaScraper
                     if (fullText.Length > 100)
                     {
                         article.Content = fullText;
-                        article.Excerpt = fullText.Substring(0, Math.Min(300, fullText.Length));
                     }
                 }
             }
@@ -333,11 +348,11 @@ public class PanoramaScraper
                         DateTime publishDate;
                         if (datePart == "сегодня")
                         {
-                            publishDate = DateTime.Now.Date.AddHours(hour).AddMinutes(minute);
+                            publishDate = DateTime.SpecifyKind(DateTime.Now.Date.AddHours(hour).AddMinutes(minute), DateTimeKind.Unspecified);
                         }
                         else if (datePart == "вчера")
                         {
-                            publishDate = DateTime.Now.Date.AddDays(-1).AddHours(hour).AddMinutes(minute);
+                            publishDate = DateTime.SpecifyKind(DateTime.Now.Date.AddDays(-1).AddHours(hour).AddMinutes(minute), DateTimeKind.Unspecified);
                         }
                         else
                         {
@@ -349,11 +364,11 @@ public class PanoramaScraper
                                 var day = int.Parse(dateMatch.Groups[1].Value);
                                 var month = int.Parse(dateMatch.Groups[2].Value);
                                 var year = int.Parse(dateMatch.Groups[3].Value);
-                                publishDate = new DateTime(year, month, day, hour, minute, 0);
+                                publishDate = new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified);
                             }
                             else
                             {
-                                publishDate = DateTime.Now.Date.AddHours(hour).AddMinutes(minute);
+                                publishDate = DateTime.SpecifyKind(DateTime.Now.Date.AddHours(hour).AddMinutes(minute), DateTimeKind.Unspecified);
                             }
                         }
                         
@@ -364,33 +379,32 @@ public class PanoramaScraper
                 // Ищем автора в собранном тексте
                 if (string.IsNullOrEmpty(article.Author) && !string.IsNullOrEmpty(allTextAfterH1))
                 {
-                    // Автор обычно идет после даты/времени
-                    // Паттерн: имя и фамилия (обычно 2-3 слова с заглавными буквами)
-                    // Ищем в тексте паттерн ФИО
-                    var authorPattern = @"\b([А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)?)\b";
-                    var authorMatches = Regex.Matches(allTextAfterH1, authorPattern);
+                    // Разбиваем текст на строки для более точного поиска
+                    var lines = allTextAfterH1.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(l => CleanText(l))
+                        .Where(l => !string.IsNullOrWhiteSpace(l))
+                        .ToList();
                     
-                    foreach (Match match in authorMatches)
+                    // Ищем автора - обычно это отдельная строка после даты/времени
+                    foreach (var line in lines)
                     {
-                        var potentialAuthor = CleanText(match.Groups[1].Value);
-                        
-                        // Пропускаем, если это категория или содержит недопустимые символы
-                        if (potentialAuthor == "Политика" || potentialAuthor == "Общество" || 
-                            potentialAuthor == "Наука" || potentialAuthor == "Экономика" || 
-                            potentialAuthor == "Статьи" || potentialAuthor.Contains(":") ||
-                            potentialAuthor.Any(char.IsDigit) || potentialAuthor.Length < 5)
+                        // Пропускаем строки с датой, временем, категорией
+                        if (line.Contains("сегодня") || line.Contains("вчера") || 
+                            Regex.IsMatch(line, @"\d{1,2}:\d{2}") ||
+                            line == "Политика" || line == "Общество" || line == "Наука" || 
+                            line == "Экономика" || line == "Статьи" || line.Length > 100)
                         {
                             continue;
                         }
                         
-                        // Проверяем, что это похоже на ФИО (2-3 слова, каждое начинается с заглавной)
-                        var words = potentialAuthor.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                        // Проверяем, похоже ли на ФИО (2-3 слова, каждое с заглавной буквы)
+                        var words = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                         if (words.Length >= 2 && words.Length <= 3)
                         {
                             bool isValid = true;
                             foreach (var word in words)
                             {
-                                if (word.Length == 0 || !char.IsUpper(word[0]) || word.Length < 2)
+                                if (word.Length < 2 || !char.IsUpper(word[0]) || word.Any(char.IsDigit))
                                 {
                                     isValid = false;
                                     break;
@@ -399,8 +413,49 @@ public class PanoramaScraper
                             
                             if (isValid)
                             {
-                                article.Author = potentialAuthor;
+                                article.Author = line;
                                 break;
+                            }
+                        }
+                    }
+                    
+                    // Если не нашли по строкам, ищем паттерном в тексте
+                    if (string.IsNullOrEmpty(article.Author))
+                    {
+                        var authorPattern = @"\b([А-ЯЁ][а-яё]{2,}\s+[А-ЯЁ][а-яё]{2,}(?:\s+[А-ЯЁ][а-яё]{2,})?)\b";
+                        var authorMatches = Regex.Matches(allTextAfterH1, authorPattern);
+                        
+                        foreach (Match match in authorMatches)
+                        {
+                            var potentialAuthor = CleanText(match.Groups[1].Value);
+                            
+                            // Пропускаем категории и недопустимые значения
+                            if (potentialAuthor == "Политика" || potentialAuthor == "Общество" || 
+                                potentialAuthor == "Наука" || potentialAuthor == "Экономика" || 
+                                potentialAuthor == "Статьи" || potentialAuthor.Contains(":") ||
+                                potentialAuthor.Any(char.IsDigit) || potentialAuthor.Length < 5)
+                            {
+                                continue;
+                            }
+                            
+                            var words = potentialAuthor.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (words.Length >= 2 && words.Length <= 3)
+                            {
+                                bool isValid = true;
+                                foreach (var word in words)
+                                {
+                                    if (word.Length < 2 || !char.IsUpper(word[0]))
+                                    {
+                                        isValid = false;
+                                        break;
+                                    }
+                                }
+                                
+                                if (isValid)
+                                {
+                                    article.Author = potentialAuthor;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -410,12 +465,32 @@ public class PanoramaScraper
                 if (string.IsNullOrEmpty(article.Category) && !string.IsNullOrEmpty(allTextAfterH1))
                 {
                     var categories = new[] { "Политика", "Общество", "Наука", "Экономика", "Статьи" };
+                    // Ищем точное совпадение в отдельных строках
+                    var lines = allTextAfterH1.Split(new[] { '\n', '\r', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(l => CleanText(l))
+                        .Where(l => !string.IsNullOrWhiteSpace(l))
+                        .ToList();
+                    
                     foreach (var category in categories)
                     {
-                        if (allTextAfterH1.Contains(category, StringComparison.OrdinalIgnoreCase))
+                        // Проверяем точное совпадение в строках
+                        if (lines.Contains(category, StringComparer.OrdinalIgnoreCase))
                         {
                             article.Category = category;
                             break;
+                        }
+                    }
+                    
+                    // Если не нашли точное совпадение, ищем в тексте
+                    if (string.IsNullOrEmpty(article.Category))
+                    {
+                        foreach (var category in categories)
+                        {
+                            if (allTextAfterH1.Contains(category, StringComparison.OrdinalIgnoreCase))
+                            {
+                                article.Category = category;
+                                break;
+                            }
                         }
                     }
                 }
@@ -441,7 +516,7 @@ public class PanoramaScraper
                         {
                             if (DateTime.TryParse(dateAttr, out var dt))
                             {
-                                article.PublishDate = dt;
+                                article.PublishDate = DateTime.SpecifyKind(dt, DateTimeKind.Unspecified);
                                 break;
                             }
                         }
@@ -451,19 +526,19 @@ public class PanoramaScraper
                             // Обрабатываем "сегодня" и "вчера"
                             if (dateText.Contains("сегодня", StringComparison.OrdinalIgnoreCase))
                             {
-                                article.PublishDate = DateTime.Now.Date;
+                                article.PublishDate = DateTime.SpecifyKind(DateTime.Now.Date, DateTimeKind.Unspecified);
                                 break;
                             }
                             if (dateText.Contains("вчера", StringComparison.OrdinalIgnoreCase))
                             {
-                                article.PublishDate = DateTime.Now.Date.AddDays(-1);
+                                article.PublishDate = DateTime.SpecifyKind(DateTime.Now.Date.AddDays(-1), DateTimeKind.Unspecified);
                                 break;
                             }
                             
                             // Пробуем разные форматы дат
                             if (DateTime.TryParse(dateText, out var parsedDate))
                             {
-                                article.PublishDate = parsedDate;
+                                article.PublishDate = DateTime.SpecifyKind(parsedDate, DateTimeKind.Unspecified);
                                 break;
                             }
                             
@@ -474,7 +549,7 @@ public class PanoramaScraper
                             {
                                 if (DateTime.TryParse($"{dateMatch.Groups[3].Value}-{dateMatch.Groups[2].Value}-{dateMatch.Groups[1].Value}", out var date))
                                 {
-                                    article.PublishDate = date;
+                                    article.PublishDate = DateTime.SpecifyKind(date, DateTimeKind.Unspecified);
                                     break;
                                 }
                             }
@@ -497,11 +572,11 @@ public class PanoramaScraper
                         DateTime publishDate;
                         if (datePart == "сегодня")
                         {
-                            publishDate = DateTime.Now.Date.AddHours(hour).AddMinutes(minute);
+                            publishDate = DateTime.SpecifyKind(DateTime.Now.Date.AddHours(hour).AddMinutes(minute), DateTimeKind.Unspecified);
                         }
                         else if (datePart == "вчера")
                         {
-                            publishDate = DateTime.Now.Date.AddDays(-1).AddHours(hour).AddMinutes(minute);
+                            publishDate = DateTime.SpecifyKind(DateTime.Now.Date.AddDays(-1).AddHours(hour).AddMinutes(minute), DateTimeKind.Unspecified);
                         }
                         else
                         {
@@ -512,11 +587,11 @@ public class PanoramaScraper
                                 var day = int.Parse(dateMatch.Groups[1].Value);
                                 var month = int.Parse(dateMatch.Groups[2].Value);
                                 var year = int.Parse(dateMatch.Groups[3].Value);
-                                publishDate = new DateTime(year, month, day, hour, minute, 0);
+                                publishDate = new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified);
                             }
                             else
                             {
-                                publishDate = DateTime.Now.Date.AddHours(hour).AddMinutes(minute);
+                                publishDate = DateTime.SpecifyKind(DateTime.Now.Date.AddHours(hour).AddMinutes(minute), DateTimeKind.Unspecified);
                             }
                         }
                         
@@ -531,7 +606,7 @@ public class PanoramaScraper
                         {
                             if (DateTime.TryParse($"{dateMatch.Groups[3].Value}-{dateMatch.Groups[2].Value}-{dateMatch.Groups[1].Value}", out var date))
                             {
-                                article.PublishDate = date;
+                                article.PublishDate = DateTime.SpecifyKind(date, DateTimeKind.Unspecified);
                             }
                         }
                     }
@@ -541,97 +616,195 @@ public class PanoramaScraper
             // Дополнительный поиск автора (если не нашли выше)
             if (string.IsNullOrEmpty(article.Author))
             {
-                var authorNodes = doc.DocumentNode.SelectNodes("//span[contains(@class, 'author')]") ??
-                                 doc.DocumentNode.SelectNodes("//div[contains(@class, 'author')]") ??
-                                 doc.DocumentNode.SelectNodes("//a[contains(@class, 'author')]");
-                
-                if (authorNodes != null)
+                // Ищем в HTML напрямую после h1
+                var h1ForAuthor = doc.DocumentNode.SelectSingleNode("//h1");
+                if (h1ForAuthor != null)
                 {
-                    var authorText = authorNodes.FirstOrDefault()?.InnerText?.Trim();
-                    if (!string.IsNullOrEmpty(authorText))
+                    // Ищем все элементы после h1
+                    var allNodes = doc.DocumentNode.SelectNodes("//h1/following-sibling::*");
+                    if (allNodes != null)
                     {
-                        article.Author = CleanText(authorText);
+                        foreach (var node in allNodes.Take(5)) // Ограничиваем первыми 5 элементами
+                        {
+                            var text = CleanText(node.InnerText);
+                            if (string.IsNullOrWhiteSpace(text) || text.Length > 100) continue;
+                            
+                            // Пропускаем даты, время, категории
+                            if (text.Contains("сегодня") || text.Contains("вчера") || 
+                                Regex.IsMatch(text, @"\d{1,2}:\d{2}") ||
+                                text == "Политика" || text == "Общество" || text == "Наука" || 
+                                text == "Экономика" || text == "Статьи")
+                            {
+                                continue;
+                            }
+                            
+                            // Проверяем, похоже ли на ФИО
+                            var words = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (words.Length >= 2 && words.Length <= 3)
+                            {
+                                bool isValid = true;
+                                foreach (var word in words)
+                                {
+                                    if (word.Length < 2 || !char.IsUpper(word[0]) || word.Any(char.IsDigit))
+                                    {
+                                        isValid = false;
+                                        break;
+                                    }
+                                }
+                                
+                                if (isValid)
+                                {
+                                    article.Author = text;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Также ищем в элементах с классом author
+                if (string.IsNullOrEmpty(article.Author))
+                {
+                    var authorNodes = doc.DocumentNode.SelectNodes("//span[contains(@class, 'author')]") ??
+                                     doc.DocumentNode.SelectNodes("//div[contains(@class, 'author')]") ??
+                                     doc.DocumentNode.SelectNodes("//a[contains(@class, 'author')]");
+                    
+                    if (authorNodes != null)
+                    {
+                        var authorText = authorNodes.FirstOrDefault()?.InnerText?.Trim();
+                        if (!string.IsNullOrEmpty(authorText))
+                        {
+                            article.Author = CleanText(authorText);
+                        }
                     }
                 }
             }
             
-            // Теги
-            var tagNodes = doc.DocumentNode.SelectNodes("//a[contains(@class, 'tag')]") ??
-                          doc.DocumentNode.SelectNodes("//span[contains(@class, 'tag')]");
-            
-            if (tagNodes != null)
+            // Категория из бейджа
+            if (string.IsNullOrEmpty(article.Category))
             {
-                article.Tags = tagNodes
-                    .Select(n => CleanText(n.InnerText))
-                    .Where(t => !string.IsNullOrEmpty(t))
-                    .ToList();
+                var categoryBadge = doc.DocumentNode.SelectSingleNode("//a[contains(@class, 'badge')]");
+                var badgeValue = categoryBadge != null ? CleanText(categoryBadge.InnerText) : string.Empty;
+                if (!string.IsNullOrEmpty(badgeValue))
+                {
+                    article.Category = badgeValue;
+                }
             }
-            
+
             // Изображение
+            if (string.IsNullOrEmpty(article.ImageUrl))
+            {
+                var heroNode = doc.DocumentNode.SelectSingleNode("//*[@data-bg-image-webp]") ??
+                               doc.DocumentNode.SelectSingleNode("//*[@data-bg-image-jpeg]");
+
+                var heroUrl = heroNode?.GetAttributeValue("data-bg-image-webp", null) ??
+                              heroNode?.GetAttributeValue("data-bg-image-jpeg", null);
+
+                var normalizedHero = NormalizeUrl(heroUrl);
+                if (!string.IsNullOrEmpty(normalizedHero))
+                {
+                    article.ImageUrl = normalizedHero;
+                }
+            }
+
             var imageNode = doc.DocumentNode.SelectSingleNode("//img[contains(@class, 'article')]") ??
                            doc.DocumentNode.SelectSingleNode("//article//img");
             
             if (imageNode != null)
             {
                 var imgSrc = imageNode.GetAttributeValue("src", "");
-                if (!string.IsNullOrEmpty(imgSrc))
+                var normalized = NormalizeUrl(imgSrc);
+                if (!string.IsNullOrEmpty(normalized))
                 {
-                    if (imgSrc.StartsWith("/"))
-                    {
-                        article.ImageUrl = _baseUrl + imgSrc;
-                    }
-                    else if (imgSrc.StartsWith("http"))
-                    {
-                        article.ImageUrl = imgSrc;
-                    }
+                    article.ImageUrl = normalized;
+                }
+            }
+
+            if (string.IsNullOrEmpty(article.ImageUrl))
+            {
+                var ogImage = doc.DocumentNode.SelectSingleNode("//meta[@property='og:image']")?.GetAttributeValue("content", null) ??
+                              doc.DocumentNode.SelectSingleNode("//meta[@property='vk:image']")?.GetAttributeValue("content", null) ??
+                              doc.DocumentNode.SelectSingleNode("//meta[@name='twitter:image']")?.GetAttributeValue("content", null) ??
+                              doc.DocumentNode.SelectSingleNode("//meta[@itemprop='image']")?.GetAttributeValue("content", null);
+
+                var normalized = NormalizeUrl(ogImage);
+                if (!string.IsNullOrEmpty(normalized))
+                {
+                    article.ImageUrl = normalized;
                 }
             }
             
             // Дополнительный поиск категории (если не нашли выше)
             if (string.IsNullOrEmpty(article.Category))
             {
-                // Ищем в ссылках и элементах с классом category
-                var categoryNode = doc.DocumentNode.SelectSingleNode("//a[contains(@class, 'category')]") ??
-                                  doc.DocumentNode.SelectSingleNode("//span[contains(@class, 'category')]") ??
-                                  doc.DocumentNode.SelectSingleNode("//div[contains(@class, 'category')]");
-                
-                if (categoryNode != null)
+                // Ищем в элементах после h1
+                var h1ForCategory = doc.DocumentNode.SelectSingleNode("//h1");
+                if (h1ForCategory != null)
                 {
-                    article.Category = CleanText(categoryNode.InnerText);
-                }
-                else
-                {
-                    // Ищем категорию в тексте после h1
-                    var h1NodeForCategory = doc.DocumentNode.SelectSingleNode("//h1");
-                    if (h1NodeForCategory != null)
+                    var allNodes = doc.DocumentNode.SelectNodes("//h1/following-sibling::*");
+                    if (allNodes != null)
                     {
-                        var followingText = h1NodeForCategory.InnerText + " " + (h1NodeForCategory.NextSibling?.InnerText ?? "");
                         var categories = new[] { "Политика", "Общество", "Наука", "Экономика", "Статьи" };
-                        foreach (var category in categories)
+                        foreach (var node in allNodes.Take(5))
                         {
-                            if (followingText.Contains(category, StringComparison.OrdinalIgnoreCase))
+                            var text = CleanText(node.InnerText);
+                            foreach (var category in categories)
                             {
-                                article.Category = category;
-                                break;
+                                if (text.Equals(category, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    article.Category = category;
+                                    break;
+                                }
                             }
+                            if (!string.IsNullOrEmpty(article.Category)) break;
                         }
                     }
                 }
+                
+                // Ищем в ссылках и элементах с классом category
+                if (string.IsNullOrEmpty(article.Category))
+                {
+                    var categoryNode = doc.DocumentNode.SelectSingleNode("//a[contains(@class, 'category')]") ??
+                                      doc.DocumentNode.SelectSingleNode("//span[contains(@class, 'category')]") ??
+                                      doc.DocumentNode.SelectSingleNode("//div[contains(@class, 'category')]");
+                    
+                    if (categoryNode != null)
+                    {
+                        article.Category = CleanText(categoryNode.InnerText);
+                    }
+                }
             }
-            
-            // Количество просмотров
-            var viewCountText = html;
-            var viewMatch = Regex.Match(viewCountText, @"(\d+)\s*(просмотр|view)", RegexOptions.IgnoreCase);
-            if (viewMatch.Success && int.TryParse(viewMatch.Groups[1].Value, out var views))
+
+            if (string.IsNullOrEmpty(article.Category))
             {
-                article.ViewCount = views;
+                var categoryFromBreadcrumbs = ExtractCategoryFromBreadcrumbs(doc);
+                if (!string.IsNullOrEmpty(categoryFromBreadcrumbs))
+                {
+                    article.Category = categoryFromBreadcrumbs;
+                }
             }
             
             // Количество комментариев
-            var commentMatch = Regex.Match(viewCountText, @"(\d+)\s*(комментари|comment)", RegexOptions.IgnoreCase);
-            if (commentMatch.Success && int.TryParse(commentMatch.Groups[1].Value, out var comments))
+            if (!article.CommentCount.HasValue)
             {
-                article.CommentCount = comments;
+                var telegramInfo = ExtractTelegramDiscussionInfo(html);
+                if (telegramInfo != null)
+                {
+                    var comments = await GetTelegramCommentCountAsync(telegramInfo.Value.channel, telegramInfo.Value.postId);
+                    if (comments.HasValue)
+                    {
+                        article.CommentCount = comments.Value;
+                    }
+                }
+            }
+
+            if (!article.CommentCount.HasValue)
+            {
+                var commentMatch = Regex.Match(html, @"(\d+)\s*(комментари|comment)", RegexOptions.IgnoreCase);
+                if (commentMatch.Success && int.TryParse(commentMatch.Groups[1].Value, out var comments))
+                {
+                    article.CommentCount = comments;
+                }
             }
         }
         catch (Exception ex)
@@ -653,6 +826,132 @@ public class PanoramaScraper
             .Trim();
     }
 
+    private string? NormalizeUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return null;
+
+        var trimmed = url.Trim();
+        if (trimmed.StartsWith("//"))
+        {
+            return $"https:{trimmed}";
+        }
+
+        if (trimmed.StartsWith("/"))
+        {
+            return $"{_rootUrl}{trimmed}";
+        }
+
+        return trimmed;
+    }
+
+    private string? ExtractCategoryFromBreadcrumbs(HtmlDocument doc)
+    {
+        var ldJsonNodes = doc.DocumentNode.SelectNodes("//script[@type='application/ld+json']");
+        if (ldJsonNodes == null) return null;
+
+        foreach (var node in ldJsonNodes)
+        {
+            var json = node.InnerText?.Trim();
+            if (string.IsNullOrEmpty(json)) continue;
+
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                var root = document.RootElement;
+                if (!root.TryGetProperty("@type", out var typeElement) ||
+                    typeElement.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                var typeValue = typeElement.GetString();
+                if (!string.Equals(typeValue, "BreadcrumbList", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!root.TryGetProperty("itemListElement", out var listElement) ||
+                    listElement.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (var item in listElement.EnumerateArray())
+                {
+                    if (item.TryGetProperty("position", out var position) &&
+                        position.ValueKind == JsonValueKind.Number &&
+                        position.GetInt32() == 2 &&
+                        item.TryGetProperty("name", out var nameElement) &&
+                        nameElement.ValueKind == JsonValueKind.String)
+                    {
+                        var name = nameElement.GetString();
+                        if (!string.IsNullOrWhiteSpace(name))
+                        {
+                            return CleanText(name);
+                        }
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    private (string channel, int postId)? ExtractTelegramDiscussionInfo(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return null;
+
+        var postIdMatch = Regex.Match(html, @"_telegram_post_id\s*=\s*(\d+)", RegexOptions.IgnoreCase);
+        if (!postIdMatch.Success) return null;
+
+        if (!int.TryParse(postIdMatch.Groups[1].Value, out var postId)) return null;
+
+        var channelMatch = Regex.Match(html, @"dataset\.telegramDiscussion\s*=\s*`([^/`]+)", RegexOptions.IgnoreCase);
+        var channel = channelMatch.Success ? channelMatch.Groups[1].Value : "ia_panorama";
+
+        if (string.IsNullOrWhiteSpace(channel))
+        {
+            channel = "ia_panorama";
+        }
+
+        return (channel, postId);
+    }
+
+    private async Task<int?> GetTelegramCommentCountAsync(string channel, int postId, int maxRetries = 2)
+    {
+        if (string.IsNullOrWhiteSpace(channel) || postId <= 0) return null;
+
+        var discussionUrl = $"https://t.me/{channel}/{postId}?embed=1&discussion=1";
+
+        try
+        {
+            var html = await FetchWithRetryAsync(discussionUrl, maxRetries);
+            if (string.IsNullOrEmpty(html)) return null;
+
+            var initMatch = Regex.Match(html, @"TWidgetDiscussion\.init\(\{\s*""comments_cnt""\s*:\s*(\d+)", RegexOptions.IgnoreCase);
+            if (initMatch.Success && int.TryParse(initMatch.Groups[1].Value, out var commentsFromInit))
+            {
+                return commentsFromInit;
+            }
+
+            var headerMatch = Regex.Match(html, @"<span class=""js-header"">(\d+)\s+comments?</span>", RegexOptions.IgnoreCase);
+            if (headerMatch.Success && int.TryParse(headerMatch.Groups[1].Value, out var commentsFromHeader))
+            {
+                return commentsFromHeader;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Не удалось получить количество комментариев для Telegram поста {channel}/{postId}: {ex.Message}");
+        }
+
+        return null;
+    }
+
 
     public async Task SaveToJsonAsync(List<Article> articles, string filename = "panorama_articles.json")
     {
@@ -661,6 +960,7 @@ public class PanoramaScraper
             WriteIndented = true,
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
+        
         
         var json = JsonSerializer.Serialize(articles, options);
         await File.WriteAllTextAsync(filename, json);
