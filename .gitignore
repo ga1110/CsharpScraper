@@ -42,7 +42,7 @@ artifacts/
 *.json
 !project.assets.json
 *.csv
-panorama_articles.json
-panorama_articles.csv
+articles.json
+articles.csv
 
 

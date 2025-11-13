@@ -1,4 +1,4 @@
-namespace Scrapper.Models;
+namespace Scraper.Models;
 
 public class Article
 {

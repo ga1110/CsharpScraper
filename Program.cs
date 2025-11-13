@@ -1,6 +1,6 @@
-﻿using Scrapper.Services;
+﻿using Scraper.Services;
 
-namespace Scrapper;
+namespace Scraper;
 
 class Program
 {
@@ -9,28 +9,22 @@ class Program
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         Console.InputEncoding = System.Text.Encoding.UTF8;
         
-        var scraper = new PanoramaScraper();
+        var scraper = new Services.Scraper();
         
         try
         {
-            // Скрапим до 5000 статей (можно изменить)
-            int maxArticles = args.Length > 0 && int.TryParse(args[0], out var count) ? count : 5000;
-            
-            Console.WriteLine($"Начинаю скрапинг panorama.pub (максимум {maxArticles} статей)...");
-            Console.WriteLine();
-            
-            var articles = await scraper.ScrapeArticlesAsync(maxArticles);
-            
-            Console.WriteLine();
-            Console.WriteLine($"Собрано {articles.Count} статей");
-            
+            if(args.Length == 0 || !int.TryParse(args[0], out var count) || count <= 0)
+                return;
+
+            var articles = await scraper.ScrapeArticlesAsync(count);
+
             // Сохраняем в JSON
-            await scraper.SaveToJsonAsync(articles, "panorama_articles.json");
+            var scraperUtils = new ScraperUtils();
+            await scraperUtils.SaveToJsonAsync(articles, "articles.json");
             
             // Также сохраняем в CSV для удобства
-            await SaveToCsvAsync(articles, "panorama_articles.csv");
+            await SaveToCsvAsync(articles, "articles.csv");
             
-            Console.WriteLine();
             Console.WriteLine("Скрапинг завершен успешно!");
         }
         catch (Exception ex)
@@ -66,8 +60,6 @@ class Program
             
             await writer.WriteLineAsync(line);
         }
-        
-        Console.WriteLine($"Сохранено {articles.Count} статей в CSV файл {filename}");
     }
     
     static string EscapeCsv(string? value)
