@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using Scraper.Services;
+
 namespace Scraper.Models;
 
 public class Article
@@ -6,7 +9,10 @@ public class Article
     public string Url { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
+    
+    [JsonConverter(typeof(CustomDateTimeConverter))]
     public DateTime? PublishDate { get; set; }
+    
     public string Author { get; set; } = string.Empty;
     public int? CommentCount { get; set; }
     public string ImageUrl { get; set; } = string.Empty;

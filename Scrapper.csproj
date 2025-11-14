@@ -11,4 +11,11 @@
     <PackageReference Include="HtmlAgilityPack" Version="1.11.71" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Searcher/**" />
+    <Content Remove="Searcher/**" />
+    <EmbeddedResource Remove="Searcher/**" />
+    <None Remove="Searcher/**" />
+  </ItemGroup>
+
 </Project>

@@ -1,77 +1,71 @@
-﻿using Scraper.Services;
+using Scraper.Services;
+using Scraper.Models;
 
-namespace Scraper;
+namespace ScraperApp;
 
+/// <summary>
+/// Главный класс приложения для скрапинга статей с сайта panorama.pub
+/// </summary>
 class Program
 {
+    /// <summary>
+    /// Точка входа в приложение. Запускает скрапинг указанного количества статей и сохраняет результат в JSON файл
+    /// </summary>
+    /// <param name="args">Аргументы командной строки: [количество_статей] [имя_файла]
+    /// Примеры:
+    /// - без аргументов: скрапит 100 статей в articles.json
+    /// - 50: скрапит 50 статей в articles.json
+    /// - 200 articles.json: скрапит 200 статей в articles.json
+    /// </param>
     static async Task Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         Console.InputEncoding = System.Text.Encoding.UTF8;
-        
-        var scraper = new Services.Scraper();
-        
+
+        // Парсим аргументы командной строки
+        int maxArticles = 100; // По умолчанию
+        string filename = "articles.json";
+
+        if (args.Length > 0)
+        {
+            // Первый аргумент - количество статей
+            if (int.TryParse(args[0], out var parsedCount) && parsedCount > 0)
+            {
+                maxArticles = parsedCount;
+            }
+            else
+            {
+                return;
+            }
+
+            // Второй аргумент - имя файла (опционально)
+            if (args.Length > 1)
+            {
+                filename = args[1];
+            }
+        }
+
+        Console.WriteLine($"Количество статей для сбора: {maxArticles}");
+        Console.WriteLine();
+
         try
         {
-            if(args.Length == 0 || !int.TryParse(args[0], out var count) || count <= 0)
-                return;
+            using var scraper = new Scraper.Services.Scraper();
+            
+            // Запускаем скрапинг
+            var articles = await scraper.ScrapeArticlesAsync(maxArticles);
 
-            var articles = await scraper.ScrapeArticlesAsync(count);
+            Console.WriteLine();
+            Console.WriteLine($"Скрапинг завершен. Собрано статей: {articles.Count}");
 
-            // Сохраняем в JSON
             var scraperUtils = new ScraperUtils();
-            await scraperUtils.SaveToJsonAsync(articles, "articles.json");
-            
-            // Также сохраняем в CSV для удобства
-            await SaveToCsvAsync(articles, "articles.csv");
-            
-            Console.WriteLine("Скрапинг завершен успешно!");
+            await scraperUtils.SaveToJsonAsync(articles, filename);
+
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"Критическая ошибка: {ex.Message}");
-            Console.WriteLine(ex.StackTrace);
+            Environment.Exit(1);
         }
-        finally
-        {
-            scraper.Dispose();
-        }
-    }
-    
-    static async Task SaveToCsvAsync(List<Models.Article> articles, string filename)
-    {
-        using var writer = new StreamWriter(filename, false, System.Text.Encoding.UTF8);
-        
-        // Заголовки
-        await writer.WriteLineAsync("Title,Url,Category,Author,PublishDate,ContentLength,CommentCount,ImageUrl");
-        
-        foreach (var article in articles)
-        {
-            var line = string.Join(",",
-                EscapeCsv(article.Title),
-                EscapeCsv(article.Url),
-                EscapeCsv(article.Category),
-                EscapeCsv(article.Author),
-                article.PublishDate?.ToString("yyyy-MM-dd") ?? "",
-                article.Content?.Length ?? 0,
-                article.CommentCount?.ToString() ?? "",
-                EscapeCsv(article.ImageUrl)
-            );
-            
-            await writer.WriteLineAsync(line);
-        }
-    }
-    
-    static string EscapeCsv(string? value)
-    {
-        if (string.IsNullOrEmpty(value)) return "";
-        
-        // Заменяем кавычки на двойные кавычки и оборачиваем в кавычки если есть запятые или переносы строк
-        value = value.Replace("\"", "\"\"");
-        if (value.Contains(",") || value.Contains("\n") || value.Contains("\r") || value.Contains("\""))
-        {
-            return $"\"{value}\"";
-        }
-        return value;
     }
 }
+

@@ -5,7 +5,10 @@ using System.Text.RegularExpressions;
 
 namespace Scraper.Services;
 
-public class Scraper
+/// <summary>
+/// Основной класс для скрапинга статей с сайта panorama.pub, собирает статьи по датам и парсит их детальную информацию
+/// </summary>
+public class Scraper : IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly HttpFetcher _httpFetcher;
@@ -13,6 +16,9 @@ public class Scraper
     private readonly string _baseUrl = "https://panorama.pub/news";
     private readonly string _rootUrl = "https://panorama.pub";
 
+    /// <summary>
+    /// Инициализирует новый экземпляр Scraper с настроенным HTTP клиентом и зависимостями
+    /// </summary>
     public Scraper()
     {
         _httpClient = new HttpClient();
@@ -25,6 +31,11 @@ public class Scraper
         _articleParser = new ArticleParser(_rootUrl, commentService);
     }
 
+    /// <summary>
+    /// Скрапит статьи, начиная с текущей даты и двигаясь назад во времени, собирая ссылки и затем парся детальную информацию
+    /// </summary>
+    /// <param name="maxArticles">Максимальное количество статей для сбора</param>
+    /// <returns>Список статей с заполненными детальными данными</returns>
     public async Task<List<Article>> ScrapeArticlesAsync(int maxArticles = 20000)
     {
         const int delay = 200;
@@ -35,7 +46,8 @@ public class Scraper
         // Начинаем с текущей даты
         var currentDate = DateTime.Now;
         var consecutiveEmptyDays = 0;
-        const int maxConsecutiveEmptyDays = 7; // Останавливаемся после 7 дней подряд без статей
+        
+        Console.WriteLine($"Скрапинг начался");
         
         while (articles.Count < maxArticles)
         {
@@ -56,12 +68,11 @@ public class Scraper
                     }
                 }
 
+                if (articles.Count > 0 && articles.Count % 10 == 0)
+                    Console.WriteLine($"Собрано: {articles.Count} из {maxArticles}");
+
                 if (newArticlesCount == 0)
-                {
                     consecutiveEmptyDays++;
-                    if (consecutiveEmptyDays >= maxConsecutiveEmptyDays)
-                        break;
-                }
                 else
                     consecutiveEmptyDays = 0;
                 
@@ -76,15 +87,15 @@ public class Scraper
                 currentDate = currentDate.AddDays(-1);
                 consecutiveEmptyDays++;
                 
-                if (consecutiveEmptyDays >= maxConsecutiveEmptyDays)
-                    break;
-                
                 await Task.Delay(delay * 10);
             }
         }
         
         var detailedArticles = new List<Article>();
         int processed = 0;
+        int total = articles.Count;
+        int lastReportedPercent = 0;
+        
         
         foreach (var article in articles)
         {
@@ -94,26 +105,39 @@ public class Scraper
                 detailedArticles.Add(detailed);
                 processed++;
                 
-                // Небольшая задержка, чтобы не перегружать сервер
-                await Task.Delay(delay);
-            }
-            catch (Exception ex)
-            {
-                // Для 404 ошибок (статья не найдена) пропускаем статью и не добавляем ее в список
-                if (ex.Message.Contains("404") || ex.Message.Contains("Not Found") ||
-                    ex.Message.Contains("Response status code does not indicate success: 4"))
-                {
-                    continue; // Пропускаем статью
-                }
+                double percent = (double)processed / total * 100;
+                int currentPercent = (int)(percent / 20) * 20;
                 
-                // Для других ошибок добавляем базовую версию статьи
-                detailedArticles.Add(article);
+                if (currentPercent > lastReportedPercent && currentPercent >= 20)
+                {
+                    lastReportedPercent = currentPercent;
+                    Console.WriteLine($"Обработано: {processed} из {total} ({currentPercent}%)");
+                }
             }
+            catch (Exception)
+            {
+                    processed++;
+                    double percent = (double)processed / total * 100;
+                    int currentPercent = (int)(percent / 20) * 20;
+                    continue;
+            }
+        }
+        
+        // Выводим финальный результат, если еще не вывели 100%
+        if (lastReportedPercent < 100)
+        {
+            Console.WriteLine($"Обработано: {processed} из {total} (100%)");
         }
         
         return detailedArticles;
     }
 
+    /// <summary>
+    /// Скрапит страницу с датой и извлекает ссылки на статьи, нормализуя URL и проверяя их валидность
+    /// </summary>
+    /// <param name="url">URL страницы с датой для скрапинга</param>
+    /// <param name="maxCount">Максимальное количество статей для сбора с этой страницы</param>
+    /// <returns>Список найденных статей (только URL и заголовки) без дубликатов</returns>
     private async Task<List<Article>> ScrapeDatePageAsync(string url, int maxCount)
     {
         var articles = new List<Article>();
@@ -143,18 +167,12 @@ public class Scraper
                         if (href.StartsWith("/") && href.Length > 1)
                         {
                             if (!href.StartsWith("//"))
-                            {
                                 href = _rootUrl + href;
-                            }
                             else
-                            {
                                 continue;
-                            }
                         }
                         else if (!href.StartsWith("http"))
-                        {
                             continue;
-                        }
                         
                         // Проверяем, что это ссылка на статью из раздела 
                         if (ScraperUtils.IsArticleUrl(href, _baseUrl))
@@ -172,7 +190,6 @@ public class Scraper
                     }
                     catch
                     {
-                        // Пропускаем проблемные ссылки
                         continue;
                     }
                 }
@@ -186,12 +203,20 @@ public class Scraper
         return articles.DistinctBy(a => a.Url).ToList();
     }
 
+    /// <summary>
+    /// Загружает HTML страницы статьи и парсит её детальную информацию через ArticleParser
+    /// </summary>
+    /// <param name="article">Объект статьи с базовой информацией (URL, заголовок)</param>
+    /// <returns>Обновленный объект статьи с заполненными детальными данными</returns>
     private async Task<Article> ScrapeArticleDetailsAsync(Article article)
     {
         var html = await _httpFetcher.FetchWithRetryAsync(article.Url);
         return await _articleParser.ParseArticleDetailsAsync(article, html);
     }
 
+    /// <summary>
+    /// Освобождает ресурсы HTTP клиента
+    /// </summary>
     public void Dispose()
     {
         _httpClient?.Dispose();
