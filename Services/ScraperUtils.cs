@@ -23,6 +23,7 @@ public class CustomDateTimeConverter : JsonConverter<DateTime?>
     {
         var value = reader.GetString();
         if (string.IsNullOrWhiteSpace(value)) return null;
+        // В сохранённом файле между датой и временем используется разделитель "|"/";" — превращаем его в стандартный "T"
         value = value.Replace("|", "T").Replace(";", "T");
         
         if (DateTime.TryParse(value, out var date))
@@ -42,6 +43,7 @@ public class CustomDateTimeConverter : JsonConverter<DateTime?>
     {
         if (value.HasValue)
         {
+            // Сериализуем дату в компактном формате, где дата и время разделены вертикальной чертой
             var formatted = value.Value.ToString("yyyy-MM-dd|HH:mm:ss");
             writer.WriteStringValue(formatted);
         }
@@ -70,11 +72,13 @@ public class ScraperUtils
     {
         if (string.IsNullOrWhiteSpace(name)) return false;
 
+        // Разбиваем строку на слова и проверяем, что она похожа на ФИО (2-3 слова)
         var words = name.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
         if (words.Length < 2 || words.Length > 3) return false;
 
         foreach (var word in words)
         {
+            // Каждое слово должно начинаться с заглавной буквы; при необходимости запрещаем цифры
             if (word.Length < 2 || !char.IsUpper(word[0]) || (!allowDigits && word.Any(char.IsDigit)))
                 return false;
         }
@@ -89,6 +93,7 @@ public class ScraperUtils
     /// <returns>true, если текст является категорией, иначе false</returns>
     private static bool IsCategory(string text)
     {
+        // Проверяем по заранее известному списку категорий, игнорируя регистр
         return Categories.Contains(text, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -100,6 +105,7 @@ public class ScraperUtils
     /// <returns>URL с добавленной датой</returns>
     public static string GetDateUrl(string url, DateTime date)
     {
+        // Сайт использует паттерн /news/dd-MM-yyyy – формируем его на основе переданной даты
         return $"{url}/{date:dd-MM-yyyy}";
     }
 
@@ -112,6 +118,7 @@ public class ScraperUtils
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;
 
+        // HTMLDecode убирает сущности, затем заменяем перевод строки и табы на пробелы и обрезаем края
         return System.Net.WebUtility.HtmlDecode(text)
             .Replace("\n", " ")
             .Replace("\r", " ")
@@ -130,9 +137,11 @@ public class ScraperUtils
         if (string.IsNullOrWhiteSpace(url)) return null;
 
         var trimmed = url.Trim();
+        // Протокол-независимые ссылки начинаются с // — дописываем https:
         if (trimmed.StartsWith("//"))
             return $"https:{trimmed}";
 
+        // Для относительных ссылок добавляем базовый URL сайта
         if (trimmed.StartsWith("/"))
             return $"{baseUrl}{trimmed}";
 
@@ -153,6 +162,7 @@ public class ScraperUtils
             Converters = { new CustomDateTimeConverter() }
         };
 
+        // Сериализуем список статей и сохраняем на диск асинхронно, чтобы не блокировать поток
         var json = JsonSerializer.Serialize(articles, options);
         await File.WriteAllTextAsync(filename, json);
     }
@@ -435,11 +445,13 @@ public class ScraperUtils
     {
         if (string.IsNullOrWhiteSpace(html)) return null;
 
+        // Номер Telegram-поста хранится в JS переменной _telegram_post_id
         var postIdMatch = Regex.Match(html, @"_telegram_post_id\s*=\s*(\d+)", RegexOptions.IgnoreCase);
         if (!postIdMatch.Success) return null;
 
         if (!int.TryParse(postIdMatch.Groups[1].Value, out var postId)) return null;
 
+        // Канал обычно зашит в data-атрибут dataset.telegramDiscussion; по умолчанию берём ia_panorama
         var channelMatch = Regex.Match(html, @"dataset\.telegramDiscussion\s*=\s*`([^/`]+)", RegexOptions.IgnoreCase);
         var channel = channelMatch.Success ? channelMatch.Groups[1].Value : "ia_panorama";
 

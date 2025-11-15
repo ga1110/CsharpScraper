@@ -15,6 +15,7 @@ public class HttpFetcher
     /// <param name="httpClient">HTTP клиент для выполнения запросов</param>
     public HttpFetcher(HttpClient httpClient)
     {
+        // HttpClient создаётся снаружи, чтобы можно было разделять настройки (прокси, заголовки, куки)
         _httpClient = httpClient;
     }
 
@@ -27,21 +28,24 @@ public class HttpFetcher
     /// <exception cref="HttpRequestException">Выбрасывается при 4xx ошибках или если все попытки исчерпаны</exception>
     public async Task<string> FetchWithRetryAsync(string url, int maxRetries = 3)
     {
+        // Пробуем выполнить запрос несколько раз, постепенно увеличивая задержку между попытками
         for (int i = 0; i < maxRetries; i++)
         {
             HttpResponseMessage? response = null;
             try
             {
+                // Делаем обычный GET запрос; HttpClient сам позаботится о keep-alive и повторном использовании соединений
                 response = await _httpClient.GetAsync(url);
 
-                // Проверяем статус код перед обработкой
+                // Сохраняем числовой код, чтобы единообразно обрабатывать разные диапазоны статусов
                 var statusCode = (int)response.StatusCode;
 
                 if (statusCode >= 400 && statusCode < 500)
+                    // На 4xx ошибки нет смысла делать повторные попытки — сразу пробрасываем исключение
                     throw new HttpRequestException(
                         $"Response status code does not indicate success: {statusCode} (Not Found)");
 
-                // Для успешных ответов возвращаем содержимое
+                // Если сервер вернул 2xx код — читаем тело и завершаем работу метода
                 if (response.IsSuccessStatusCode)
                 {
                     var content = await response.Content.ReadAsStringAsync();
@@ -50,7 +54,7 @@ public class HttpFetcher
                     return content;
                 }
 
-                // Для 5xx ошибок вызываем EnsureSuccessStatusCode
+                // Для остальных статусов (обычно 5xx) принудительно генерируем исключение, чтобы перейти в блок catch
                 response.EnsureSuccessStatusCode();
                 var result = await response.Content.ReadAsStringAsync();
                 response.Dispose();
@@ -59,21 +63,22 @@ public class HttpFetcher
             }
             catch (HttpRequestException ex)
             {
-                // Проверяем сообщение на наличие 404 или других 4xx ошибок
+                // Анализируем текст исключения: 404 и любые другие 4xx повторять бессмысленно
                 // Сообщение обычно содержит "Response status code does not indicate success: 404 (Not Found)"
                 if (ex.Message.Contains("404") || ex.Message.Contains("Not Found") ||
                     ex.Message.Contains("Response status code does not indicate success: 4"))
                     throw;
 
-                // Для других ошибок (5xx, таймауты и т.д.) делаем повторные попытки
+                // Все остальные ошибки (5xx, таймауты, обрыв соединения) можно повторить
                 if (i == maxRetries - 1)
                     throw;
 
+                // Линейно увеличиваем задержку: 1 сек, 2 сек, 3 сек ...
                 await Task.Delay(1000 * (i + 1)); // Увеличиваем задержку с каждой попыткой
             }
             catch (Exception ex)
             {
-                // Проверяем, не является ли это ошибкой 404 или другой 4xx ошибкой
+                // На случай других исключений (например, TaskCanceledException) выполняем ту же проверку
                 if (ex.Message.Contains("404") || ex.Message.Contains("Not Found") ||
                     ex.Message.Contains("Response status code does not indicate success: 4"))
                     throw;
@@ -81,6 +86,7 @@ public class HttpFetcher
                 if (i == maxRetries - 1)
                     throw;
 
+                // Делаем паузу и пробуем снова
                 await Task.Delay(1000 * (i + 1)); // Увеличиваем задержку с каждой попыткой
             }
             finally
@@ -89,6 +95,7 @@ public class HttpFetcher
                     response.Dispose();
             }
         }
+        // Если добрались сюда, значит все попытки были исчерпаны — сообщаем об этом вызывающему коду
         throw new Exception($"Не удалось загрузить {url} после {maxRetries} попыток");
     }
 }

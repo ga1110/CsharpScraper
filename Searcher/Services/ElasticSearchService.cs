@@ -3,6 +3,7 @@ using Elastic.Clients.Elasticsearch.QueryDsl;
 using Elastic.Transport;
 using Scraper.Models;
 using Searcher.Models;
+using System;
 using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -16,33 +17,32 @@ namespace Searcher.Services;
 public class ElasticSearchService
 {
     private readonly ElasticsearchClient _client;
-    private const string IndexName = "articles";
-
+    private const string _indexName = "articles";
+    private static readonly string _connectionString =
+        Environment.GetEnvironmentVariable("ELASTICSEARCH_URL") ?? "https://localhost:9200";
     /// <summary>
     /// Инициализирует новый экземпляр ElasticSearchService с указанным адресом ElasticSearch сервера
     /// </summary>
-    /// <param name="connectionString">Строка подключения к ElasticSearch (по умолчанию "http://localhost:9200")</param>
+    /// <param name="_connectionString">Строка подключения к ElasticSearch (по умолчанию "http://localhost:9200")</param>
     /// <param name="username">Имя пользователя для базовой аутентификации (опционально)</param>
     /// <param name="password">Пароль для базовой аутентификации (опционально)</param>
-    public ElasticSearchService(string connectionString = "http://localhost:9200", string? username = null, string? password = null)
+    public ElasticSearchService(string? username = null, string? password = null)
     {
-        var uri = new Uri(connectionString);
+        var uri = new Uri(_connectionString);
         var settings = new ElasticsearchClientSettings(uri)
-            .DefaultIndex(IndexName)
+            .DefaultIndex(_indexName)
             .EnableDebugMode();
 
-        // Настраиваем SSL для HTTPS подключений (игнорируем проверку сертификата для разработки)
+        // Настраиваем SSL для HTTPS подключений
         if (uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
-        {
+            // В учебных проектах часто используются self-signed сертификаты, поэтому отключаем проверку
             settings.ServerCertificateValidationCallback((sender, certificate, chain, sslPolicyErrors) => true);
-        }
 
         // Настраиваем аутентификацию через базовую аутентификацию, если указаны username и password
         if (!string.IsNullOrEmpty(username) && !string.IsNullOrEmpty(password))
-        {
             settings.Authentication(new BasicAuthentication(username, password));
-        }
 
+        // Создаём клиент ElasticSearch, который будем переиспользовать для всех операций
         _client = new ElasticsearchClient(settings);
     }
 
@@ -54,11 +54,13 @@ public class ElasticSearchService
     {
         try
         {
-            var existsResponse = await _client.Indices.ExistsAsync(IndexName);
+            // Проверяем, существует ли индекс, чтобы не создавать его повторно
+            var existsResponse = await _client.Indices.ExistsAsync(_indexName);
             
             if (!existsResponse.Exists)
             {
-                var createResponse = await _client.Indices.CreateAsync(IndexName, c => c
+                // Описываем схему индекса: типы полей, ключевые слова, текстовые поля и т.д.
+                var createResponse = await _client.Indices.CreateAsync(_indexName, c => c
                     .Mappings(m => m
                         .Properties<ArticleDocument>(p => p
                             .Keyword(k => k.Id)
@@ -84,15 +86,11 @@ public class ElasticSearchService
                         if (error?.RootCause != null && error.RootCause.Count > 0)
                         {
                             foreach (var cause in error.RootCause)
-                            {
                                 Console.WriteLine($"  Причина: {cause.Reason}");
-                            }
                         }
                     }
                     else
-                    {
                         Console.WriteLine($"Детали: {createResponse.DebugInformation}");
-                    }
                     return false;
                 }
 
@@ -116,9 +114,7 @@ public class ElasticSearchService
             
             Console.WriteLine($"Исключение при работе с индексом: {ex.Message}");
             if (ex.InnerException != null)
-            {
                 Console.WriteLine($"Внутренняя ошибка: {ex.InnerException.Message}");
-            }
             return false;
         }
     }
@@ -130,6 +126,7 @@ public class ElasticSearchService
     /// <returns>true, если индексация прошла успешно, иначе false</returns>
     public async Task<bool> IndexArticleAsync(Article article)
     {
+        // Преобразуем модель скрапера в документ, подходящий для ElasticSearch
         var document = new ArticleDocument
         {
             Id = GenerateArticleId(article.Url),
@@ -143,8 +140,9 @@ public class ElasticSearchService
             ImageUrl = article.ImageUrl
         };
 
-        var response = await _client.IndexAsync(document, IndexName, document.Id);
+        var response = await _client.IndexAsync(document, _indexName, document.Id);
 
+        // Возвращаем флаг успешности, чтобы вызывающий код мог отреагировать на ошибки
         return response.IsValidResponse;
     }
 
@@ -154,6 +152,7 @@ public class ElasticSearchService
     private string GenerateArticleId(string url)
     {
         using var sha256 = SHA256.Create();
+        // Используем SHA256 от URL, чтобы одинаковые статьи всегда получали одинаковый ID
         var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(url));
         return Convert.ToBase64String(hashBytes).Replace("/", "_").Replace("+", "-").TrimEnd('=');
     }
@@ -163,8 +162,9 @@ public class ElasticSearchService
     /// </summary>
     /// <param name="articles">Список статей для индексации</param>
     /// <returns>Кортеж: (успешность операции, количество фактически проиндексированных документов, количество удаленных дубликатов)</returns>
-    public async Task<(bool Success, int IndexedCount, int DuplicatesRemoved)> IndexArticlesAsync(List<Article> articles)
+    public async Task<(bool Success, int IndexedCount)> IndexArticlesAsync(List<Article> articles)
     {
+        // Сначала проектируем список документов с предсказуемыми ID и нужными полями
         var documents = articles.Select(article => new ArticleDocument
         {
             Id = GenerateArticleId(article.Url),
@@ -177,45 +177,6 @@ public class ElasticSearchService
             CommentCount = article.CommentCount,
             ImageUrl = article.ImageUrl
         }).ToList();
-
-        // Проверяем на дубликаты ID (могут возникнуть из-за коллизий хеша или одинаковых URL)
-        var duplicateIds = documents
-            .GroupBy(d => d.Id)
-            .Where(g => g.Count() > 1)
-            .ToList();
-        
-        if (duplicateIds.Any())
-        {
-            Console.WriteLine();
-            Console.WriteLine($"⚠️  Обнаружено дубликатов ID: {duplicateIds.Count} уникальных ID встречаются несколько раз");
-            Console.WriteLine($"   Это приведет к перезаписи документов при индексации!");
-            Console.WriteLine();
-            Console.WriteLine("Примеры дубликатов ID:");
-            foreach (var group in duplicateIds.Take(5))
-            {
-                Console.WriteLine($"   ID: {group.Key}");
-                foreach (var doc in group.Take(3))
-                {
-                    Console.WriteLine($"      - \"{doc.Title}\"");
-                    Console.WriteLine($"        URL: {doc.Url}");
-                }
-                if (group.Count() > 3)
-                {
-                    Console.WriteLine($"      ... и еще {group.Count() - 3}");
-                }
-            }
-            Console.WriteLine();
-            Console.WriteLine("Удаляем дубликаты, оставляя только первый документ для каждого ID...");
-            
-            // Удаляем дубликаты по ID, оставляя первый документ
-            documents = documents
-                .GroupBy(d => d.Id)
-                .Select(g => g.First())
-                .ToList();
-            
-            Console.WriteLine($"После удаления дубликатов ID: {documents.Count} уникальных документов для индексации");
-            Console.WriteLine();
-        }
 
         // Упрощенный подход: индексируем документы пакетами используя IndexAsync
         const int batchSize = 100;
@@ -232,27 +193,22 @@ public class ElasticSearchService
             {
                 try
                 {
-                    var response = await _client.IndexAsync(doc, IndexName, doc.Id);
+                    // Каждый документ отправляем отдельным запросом — так проще обрабатывать ошибки на учебном проекте
+                    var response = await _client.IndexAsync(doc, _indexName, doc.Id);
                     if (response.IsValidResponse)
-                    {
                         successCount++;
-                    }
                     else
                     {
                         allSuccess = false;
                         string errorMessage = "Неизвестная ошибка";
                         
                         if (response.ElasticsearchServerError != null)
-                        {
                             errorMessage = response.ElasticsearchServerError.Error?.Reason ?? "Ошибка сервера ElasticSearch";
-                        }
                         else if (!string.IsNullOrEmpty(response.DebugInformation))
-                        {
                             errorMessage = response.DebugInformation;
-                        }
                         
                         failedArticles.Add((doc.Title, doc.Url, errorMessage));
-                        Console.WriteLine($"❌ Ошибка при индексации: \"{doc.Title}\"");
+                        Console.WriteLine($"Ошибка при индексации: \"{doc.Title}\"");
                         Console.WriteLine($"   URL: {doc.Url}");
                         Console.WriteLine($"   Причина: {errorMessage}");
                     }
@@ -261,7 +217,7 @@ public class ElasticSearchService
                 {
                     allSuccess = false;
                     failedArticles.Add((doc.Title, doc.Url, ex.Message));
-                    Console.WriteLine($"❌ Исключение при индексации: \"{doc.Title}\"");
+                    Console.WriteLine($"Исключение при индексации: \"{doc.Title}\"");
                     Console.WriteLine($"   URL: {doc.Url}");
                     Console.WriteLine($"   Ошибка: {ex.Message}");
                     if (ex.InnerException != null)
@@ -272,21 +228,12 @@ public class ElasticSearchService
             }
         }
 
-        // Вычисляем количество удаленных дубликатов
-        int duplicatesRemoved = duplicateIds.Any() 
-            ? duplicateIds.Sum(g => g.Count() - 1) 
-            : 0;
 
         // Выводим итоговую статистику
         Console.WriteLine();
         Console.WriteLine($"Статистика индексации:");
         Console.WriteLine($"    Успешно проиндексировано: {successCount} из {documents.Count}");
         Console.WriteLine($"    Не удалось: {failedArticles.Count} из {documents.Count}");
-        
-        if (duplicatesRemoved > 0)
-        {
-            Console.WriteLine($"    Примечание: {duplicatesRemoved} документов были удалены как дубликаты ID перед индексацией");
-        }
         
         if (failedArticles.Count > 0)
         {
@@ -301,7 +248,7 @@ public class ElasticSearchService
             }
         }
 
-        return (allSuccess, successCount, duplicatesRemoved);
+        return (allSuccess, successCount);
     }
 
     /// <summary>
@@ -320,6 +267,7 @@ public class ElasticSearchService
         string? category = null,
         string? author = null)
     {
+        // MultiMatch позволяет искать одновременно по нескольким полям с разными весами
         Query queryContainer = new MultiMatchQuery
         {
             Query = query,
@@ -335,6 +283,7 @@ public class ElasticSearchService
             
             if (!string.IsNullOrEmpty(category))
             {
+                // Фильтр по категории делаем через TermQuery, чтобы искать точные совпадения
                 filters.Add(new TermQuery
                 {
                     Field = "category",
@@ -355,6 +304,7 @@ public class ElasticSearchService
             {
                 queryContainer = new BoolQuery
                 {
+                    // Основной текстовый запрос кладём в Must, а фильтры — в Filter (они не влияют на scoring)
                     Must = new[] { queryContainer },
                     Filter = filters
                 };
@@ -362,7 +312,7 @@ public class ElasticSearchService
         }
 
         // Упрощенный запрос без подсветки для совместимости
-        var searchRequest = new SearchRequest(IndexName)
+        var searchRequest = new SearchRequest(_indexName)
         {
             From = from,
             Size = size,
@@ -395,6 +345,7 @@ public class ElasticSearchService
                     }
                     if (highlightList.Count > 0)
                     {
+                        // Сохраняем подсветки по ID документа, чтобы позже быстро найти их при выводе результатов
                         highlights[hit.Id] = highlightList;
                     }
                 }
@@ -417,6 +368,7 @@ public class ElasticSearchService
     {
         try
         {
+            // Метод Ping делает HEAD-запрос к корню сервера и возвращает true при HTTP 200
             var response = await _client.PingAsync();
             return response.IsValidResponse;
         }
@@ -435,15 +387,16 @@ public class ElasticSearchService
         try
         {
             // Сначала проверяем, существует ли индекс
-            var existsResponse = await _client.Indices.ExistsAsync(IndexName);
+            var existsResponse = await _client.Indices.ExistsAsync(_indexName);
             if (!existsResponse.Exists)
             {
                 // Индекс не существует, возвращаем 0
                 return 0;
             }
             
+            // Count API быстрее, чем полнотекстовый поиск, и идеально подходит для статистики
             var response = await _client.CountAsync<ArticleDocument>(c => c
-                .Indices(IndexName)
+                .Indices(_indexName)
             );
             
             if (!response.IsValidResponse)
@@ -471,11 +424,12 @@ public class ElasticSearchService
     {
         try
         {
-            var existsResponse = await _client.Indices.ExistsAsync(IndexName);
+            // Удаляем индекс только если он действительно существует
+            var existsResponse = await _client.Indices.ExistsAsync(_indexName);
             
             if (existsResponse.Exists)
             {
-                var deleteResponse = await _client.Indices.DeleteAsync(IndexName);
+                var deleteResponse = await _client.Indices.DeleteAsync(_indexName);
                 
                 if (!deleteResponse.IsValidResponse)
                 {

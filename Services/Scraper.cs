@@ -21,11 +21,15 @@ public class Scraper : IDisposable
     /// </summary>
     public Scraper()
     {
+        // Создаём HTTP клиент, который будет переиспользоваться для всех запросов в рамках жизненного цикла скрапера
         _httpClient = new HttpClient();
+        // Настраиваем user-agent, чтобы выглядеть как обычный браузер и снижать риск блокировок
         _httpClient.DefaultRequestHeaders.Add("User-Agent", 
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        // Ждём не более 30 секунд на каждый HTTP ответ
         _httpClient.Timeout = TimeSpan.FromSeconds(30);
         
+        // Инициализируем вспомогательные сервисы для запросов, комментариев и парсинга
         _httpFetcher = new HttpFetcher(_httpClient);
         var commentService = new CommentService(_httpFetcher);
         _articleParser = new ArticleParser(_rootUrl, commentService);
@@ -38,12 +42,14 @@ public class Scraper : IDisposable
     /// <returns>Список статей с заполненными детальными данными</returns>
     public async Task<List<Article>> ScrapeArticlesAsync(int maxArticles = 20000)
     {
+        // Делаем небольшие паузы между запросами, чтобы не перегружать источник
         const int delay = 200;
 
+        // Храним уже собранные статьи и список посещённых URL, чтобы избегать дубликатов
         var articles = new List<Article>();
         var visitedUrls = new HashSet<string>();
 
-        // Начинаем с текущей даты
+        // Начинаем обход с текущей даты и двигаемся назад, пока не соберём нужное количество статей
         var currentDate = DateTime.Now;
         var consecutiveEmptyDays = 0;
         
@@ -51,10 +57,12 @@ public class Scraper : IDisposable
         
         while (articles.Count < maxArticles)
         {
+            // Формируем URL страницы с новостями за конкретный день
             var dateUrl = ScraperUtils.GetDateUrl(_baseUrl, currentDate);
 
             try
             {
+                // Скрапим страницу за дату и получаем найденные там статьи (только ссылки и заголовки)
                 var dateArticles = await ScrapeDatePageAsync(dateUrl, maxArticles - articles.Count);
                 var newArticlesCount = 0;
                 
@@ -62,7 +70,9 @@ public class Scraper : IDisposable
                 {
                     if (!visitedUrls.Contains(article.Url) && articles.Count < maxArticles)
                     {
+                        // Запоминаем URL, чтобы не обрабатывать его повторно на следующих итерациях
                         visitedUrls.Add(article.Url);
+                        // Добавляем статью в общий список для дальнейшего детального парсинга
                         articles.Add(article);
                         newArticlesCount++;
                     }
@@ -72,18 +82,21 @@ public class Scraper : IDisposable
                     Console.WriteLine($"Собрано: {articles.Count} из {maxArticles}");
 
                 if (newArticlesCount == 0)
+                    // Если за текущий день не нашлось новых ссылок, увеличиваем счётчик пустых дней
                     consecutiveEmptyDays++;
                 else
+                    // Как только нашли новые ссылки – сбрасываем счётчик
                     consecutiveEmptyDays = 0;
                 
-                // Переходим к предыдущей дате
+                // Независимо от результата переходим к предыдущей дате
                 currentDate = currentDate.AddDays(-1);
                 
-                // Задержка между запросами
+                // Делаем короткую паузу перед следующим запросом
                 await Task.Delay(delay);
             }
             catch (Exception)
             {
+                // При сбое считаем день пустым, отступаем на один день и ждём дольше, чтобы не ддосить сайт
                 currentDate = currentDate.AddDays(-1);
                 consecutiveEmptyDays++;
                 
@@ -91,6 +104,7 @@ public class Scraper : IDisposable
             }
         }
         
+        // После сбора ссылок парсим детальную информацию (контент, автора, дату и т.д.)
         var detailedArticles = new List<Article>();
         int processed = 0;
         int total = articles.Count;
@@ -101,6 +115,7 @@ public class Scraper : IDisposable
         {
             try
             {
+                // Скачиваем HTML и углублённо парсим статью
                 var detailed = await ScrapeArticleDetailsAsync(article);
                 detailedArticles.Add(detailed);
                 processed++;
@@ -116,6 +131,7 @@ public class Scraper : IDisposable
             }
             catch (Exception)
             {
+                    // Ошибки при парсинге отдельной статьи не должны прерывать процесс — просто считаем статью пропущенной
                     processed++;
                     double percent = (double)processed / total * 100;
                     int currentPercent = (int)(percent / 20) * 20;
@@ -123,7 +139,7 @@ public class Scraper : IDisposable
             }
         }
         
-        // Выводим финальный результат, если еще не вывели 100%
+        // При необходимости выводим финальное сообщение о прогрессе (например, если так и не достигли 100% в цикле)
         if (lastReportedPercent < 100)
         {
             Console.WriteLine($"Обработано: {processed} из {total} (100%)");
@@ -144,11 +160,12 @@ public class Scraper : IDisposable
         
         try
         {
+            // Загружаем HTML страницы за нужную дату и подготавливаем документ для парсинга
             var html = await _httpFetcher.FetchWithRetryAsync(url);
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
             
-            // Ищем ссылки на статьи - пробуем разные селекторы
+            // Ищем любые ссылки и fallback'ом пробуем более общий селектор, чтобы не пропустить структуру
             var articleLinks = doc.DocumentNode.SelectNodes("//a[@href]") ?? 
                               doc.DocumentNode.SelectNodes("//a[contains(@href, '/')]");
             
@@ -158,12 +175,13 @@ public class Scraper : IDisposable
                 {
                     try
                     {
+                        // Как только достигли лимита статей с этой страницы – останавливаем цикл
                         if (articles.Count >= maxCount) break;
                         
                         var href = link.GetAttributeValue("href", "");
                         if (string.IsNullOrEmpty(href)) continue;
                         
-                        // Нормализуем URL
+                        // Нормализуем URL, превращая относительные ссылки в абсолютные и отбрасывая невалидные варианты
                         if (href.StartsWith("/") && href.Length > 1)
                         {
                             if (!href.StartsWith("//"))
@@ -174,12 +192,13 @@ public class Scraper : IDisposable
                         else if (!href.StartsWith("http"))
                             continue;
                         
-                        // Проверяем, что это ссылка на статью из раздела 
+                        // Проверяем, что ссылка действительно ведёт на страницу статьи, а не на служебный раздел
                         if (ScraperUtils.IsArticleUrl(href, _baseUrl))
                         {
                             var title = ScraperUtils.ExtractTitle(link);
                             if (!string.IsNullOrEmpty(title) && title.Length > 10 && title.Length < 500)
                             {
+                                // Сохраняем минимальный набор данных (заголовок + URL); остальное дополним позже
                                 articles.Add(new Article
                                 {
                                     Title = title,
@@ -197,9 +216,11 @@ public class Scraper : IDisposable
         }
         catch (Exception)
         {
-            throw; // Пробрасываем исключение, чтобы обработать его в основном методе
+            // Пусть ошибка обработается в вызывающем методе, где уже решим: повторить попытку или пропустить день
+            throw;
         }
         
+        // Возвращаем уникальные статьи, фильтруя возможные дубликаты ссылок
         return articles.DistinctBy(a => a.Url).ToList();
     }
 
@@ -210,6 +231,7 @@ public class Scraper : IDisposable
     /// <returns>Обновленный объект статьи с заполненными детальными данными</returns>
     private async Task<Article> ScrapeArticleDetailsAsync(Article article)
     {
+        // Скачиваем страницу конкретной статьи и передаём HTML специализированному парсеру
         var html = await _httpFetcher.FetchWithRetryAsync(article.Url);
         return await _articleParser.ParseArticleDetailsAsync(article, html);
     }
@@ -219,6 +241,7 @@ public class Scraper : IDisposable
     /// </summary>
     public void Dispose()
     {
+        // Завершаем работу HTTP клиента, чтобы освободить сокеты и прочие unmanaged ресурсы
         _httpClient?.Dispose();
     }
 }

@@ -20,7 +20,9 @@ public class ArticleParser
     /// <param name="commentService">Сервис для получения количества комментариев (опционально)</param>
     public ArticleParser(string rootUrl, CommentService? commentService = null)
     {
+        // Сохраняем базовый URL, чтобы позже можно было нормализовать относительные ссылки
         _rootUrl = rootUrl;
+        // Компонент для получения количества комментариев может быть необязательным
         _commentService = commentService;
     }
 
@@ -101,11 +103,13 @@ public class ArticleParser
     {
         if (string.IsNullOrEmpty(article.Author))
         {
+            // Сначала ищем специфичный для статей Open Graph мета-тег, затем более общий тег author
             var authorMeta = doc.DocumentNode.SelectSingleNode("//meta[@property='article:author']") ??
                              doc.DocumentNode.SelectSingleNode("//meta[@name='author']");
             var authorValue = authorMeta?.GetAttributeValue("content", null);
             if (!string.IsNullOrWhiteSpace(authorValue) &&
                 !authorValue.Equals("ИА Панорама", StringComparison.OrdinalIgnoreCase))
+                // Если нашли осмысленное значение, очищаем текст и сохраняем его в модель
                 article.Author = ScraperUtils.CleanText(authorValue);
         }
     }
@@ -452,9 +456,11 @@ public class ArticleParser
     {
         if (string.IsNullOrEmpty(article.Category))
         {
+            // На панораме категория выводится бейджем-ссылкой; извлекаем её текст
             var categoryBadge = doc.DocumentNode.SelectSingleNode("//a[contains(@class, 'badge')]");
             var badgeValue = categoryBadge != null ? ScraperUtils.CleanText(categoryBadge.InnerText) : string.Empty;
             if (!string.IsNullOrEmpty(badgeValue))
+                // Если значение не пустое, считаем его финальной категорией
                 article.Category = badgeValue;
         }
     }
@@ -468,6 +474,7 @@ public class ArticleParser
     {
         if (string.IsNullOrEmpty(article.ImageUrl))
         {
+            // Сначала проверяем геро-изображения, которые задаются через data-атрибуты
             var heroNode = doc.DocumentNode.SelectSingleNode("//*[@data-bg-image-webp]") ??
                            doc.DocumentNode.SelectSingleNode("//*[@data-bg-image-jpeg]");
 
@@ -476,6 +483,7 @@ public class ArticleParser
 
             var normalizedHero = ScraperUtils.NormalizeUrl(_rootUrl, heroUrl);
             if (!string.IsNullOrEmpty(normalizedHero))
+                // Если нормализация прошла успешно, используем найденное изображение
                 article.ImageUrl = normalizedHero;
         }
 
@@ -484,6 +492,7 @@ public class ArticleParser
 
         if (imageNode != null)
         {
+            // Пытаемся взять src из <img>, так как некоторые статьи имеют встроенное изображение
             var imgSrc = imageNode.GetAttributeValue("src", "");
             var normalized = ScraperUtils.NormalizeUrl(_rootUrl, imgSrc);
             if (!string.IsNullOrEmpty(normalized))
@@ -492,6 +501,7 @@ public class ArticleParser
 
         if (string.IsNullOrEmpty(article.ImageUrl))
         {
+            // Если до сих пор не нашли, берём URL из стандартных мета-тегов (OG/Twitter)
             var ogImage = doc.DocumentNode.SelectSingleNode("//meta[@property='og:image']")?.GetAttributeValue("content", null) ??
                           doc.DocumentNode.SelectSingleNode("//meta[@property='vk:image']")?.GetAttributeValue("content", null) ??
                           doc.DocumentNode.SelectSingleNode("//meta[@name='twitter:image']")?.GetAttributeValue("content", null) ??
@@ -548,6 +558,7 @@ public class ArticleParser
     {
         if (string.IsNullOrEmpty(article.Category))
         {
+            // Breadcrumbs обычно содержат путь вида Главная / Категория / Статья – берём второй элемент
             var categoryFromBreadcrumbs = ScraperUtils.ExtractCategoryFromBreadcrumbs(doc);
             if (!string.IsNullOrEmpty(categoryFromBreadcrumbs))
                 article.Category = categoryFromBreadcrumbs;

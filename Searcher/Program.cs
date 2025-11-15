@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Text;
 using Searcher.Services;
 using Scraper.Models;
 using Scraper.Services;
@@ -9,34 +11,37 @@ namespace Searcher;
 /// </summary>
 class Program
 {
+    private static readonly char[] TagSeparators = new[] { '=', ':' };
+
     /// <summary>
     /// Точка входа в приложение. Поддерживает два режима: индексацию статей (index) и интерактивный поиск
     /// </summary>
     /// <param name="args">Аргументы командной строки: "index <путь_к_json>" для индексации или без аргументов для поиска</param>
     static async Task Main(string[] args)
     {
+        // Включаем поддержку UTF-8 в консоли, чтобы корректно отображать русские тексты и подсветки
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         Console.InputEncoding = System.Text.Encoding.UTF8;
 
-        // Настройки подключения к ElasticSearch
+        // Подготавливаем сервисы ElasticSearch и индексации, чтобы использовать их в обоих режимах работы
         var elasticSearchService = new ElasticSearchService(
-            connectionString: "https://localhost:9200",
             username: "elastic",
             password: "muVmg+YxSgExd2NKBttV"
         );
         var indexingService = new IndexingService(elasticSearchService);
 
-        // Проверяем подключение к ElasticSearch
+        // Перед работой проверяем доступность кластера и сообщаем пользователю диагностическую информацию
         Console.WriteLine("Проверка подключения к ElasticSearch");
         try
         {
-            // Сначала проверяем ping
+            // Простой ping даёт быстрый ответ о том, жив ли кластер
             if (!await elasticSearchService.PingAsync())
             {
                 Console.WriteLine("Ошибка подключения к ElasticSearch");
                 return;
             }
             
+            // Если пинг успешен — выводим количество документов, чтобы понимать текущее состояние индекса
             var health = await elasticSearchService.GetTotalDocumentsAsync();
             Console.WriteLine($"Подключение успешно. Документов в индексе: {health}");
         }
@@ -52,20 +57,20 @@ class Program
             return;
         }
 
+        // Режим "index <path>" позволяет индексировать заранее подготовленный JSON без запуска интерактивного меню
         if (args.Length > 0 && args[0] == "index" && args.Length > 1)
         {
             await indexingService.IndexArticlesFromJsonAsync(args[1]);
             return;
         }
 
-        // Иначе запускаем поиск
+        // Иначе переходим в интерактивный режим, где доступны команды scrape/index/search
         Console.WriteLine("Поисковик статей");
         Console.WriteLine("Введите команды:");
         Console.WriteLine("  scrape <количество> [--clear] - скрапить статьи и проиндексировать в ElasticSearch");
         Console.WriteLine("  index - проиндексировать статьи из articles.json ");
-        Console.WriteLine("  search <запрос> [размер=10] - поиск статей");
-        Console.WriteLine("  search <запрос> --category <категория> [размер=10] - поиск с фильтром по категории");
-        Console.WriteLine("  search <запрос> --author <автор> [размер=10] - поиск с фильтром по автору");
+        Console.WriteLine("  search <запрос> [category=<категория>] [author=<автор>] [size=10] - единый поиск с тегами");
+        Console.WriteLine("     Теги: category=, author=, size= или --category, --author, --size");
         Console.WriteLine("  exit - выход");
         Console.WriteLine();
 
@@ -81,10 +86,13 @@ class Program
                 break;
 
             if (input.ToLower().StartsWith("scrape "))
+                // Команда scrape запускает сбор свежих статей и их последующую индексацию
                 await HandleScrapeCommand(input, elasticSearchService);
             else if (input.ToLower().Trim() == "index")
+                // Команда index переиспользует существующий JSON, чтобы быстро перестроить индекс
                 await HandleIndexCommand(indexingService, elasticSearchService);
             else if (input.ToLower().StartsWith("search "))
+                // Команда search выполняет полнотекстовый поиск и выводит результаты в консоль
                 await HandleSearchCommand(input, elasticSearchService);
             else
                 Console.WriteLine("Неизвестная команда. Используйте 'scrape <количество>', 'index', 'search <запрос>' или 'exit'");
@@ -92,48 +100,80 @@ class Program
     }
 
     /// <summary>
-    /// Обрабатывает команду поиска, парсит аргументы (запрос, размер, фильтры по категории и автору) и выводит результаты
+    /// Обрабатывает команду поиска, поддерживая теги category/author/size в любом порядке и формате записи
     /// </summary>
-    /// <param name="command">Строка команды поиска в формате "search <запрос> [--category <категория>] [--author <автор>] [размер]"</param>
+    /// <param name="command">Строка команды поиска в формате "search <запрос> [category=<категория>] [author=<автор>] [size=<число>]"</param>
     /// <param name="elasticSearchService">Сервис для выполнения поиска в ElasticSearch</param>
     static async Task HandleSearchCommand(string command, ElasticSearchService elasticSearchService)
     {
-        var parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        
-        if (parts.Length < 2)
+        var arguments = command.Length > "search".Length
+            ? command.Substring("search".Length).Trim()
+            : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(arguments))
         {
-            Console.WriteLine("Использование: search <запрос> [размер] или search <запрос> --category <категория> [размер]");
+            PrintSearchUsage();
             return;
         }
 
-        string query = string.Empty;
+        var tokens = SplitArguments(arguments);
+
+        if (tokens.Count == 0)
+        {
+            PrintSearchUsage();
+            return;
+        }
+
+        var queryParts = new List<string>();
         int size = 10;
         string? category = null;
         string? author = null;
 
-        // Парсим аргументы
-        for (int i = 1; i < parts.Length; i++)
+        for (int i = 0; i < tokens.Count; i++)
         {
-            if (parts[i] == "--category" && i + 1 < parts.Length)
+            var token = tokens[i];
+
+            if (TryParseSearchTag(token, out var tagType, out var inlineValue, out var requiresNextValue))
             {
-                category = parts[i + 1];
-                i++;
+                string? tagValue = inlineValue;
+
+                if (requiresNextValue)
+                {
+                    if (i + 1 >= tokens.Count)
+                    {
+                        Console.WriteLine($"Тег '{GetTagLabel(tagType)}' требует значение. Пример: category=\"Новости\"");
+                        return;
+                    }
+
+                    tagValue = tokens[++i];
+                }
+
+                if (string.IsNullOrWhiteSpace(tagValue))
+                    continue;
+
+                switch (tagType)
+                {
+                    case SearchTagType.Category:
+                        category = tagValue;
+                        break;
+                    case SearchTagType.Author:
+                        author = tagValue;
+                        break;
+                    case SearchTagType.Size:
+                        if (int.TryParse(tagValue, out var parsedSize) && parsedSize > 0)
+                            size = parsedSize;
+                        else
+                            Console.WriteLine($"Размер должен быть положительным числом. Игнорируем значение '{tagValue}'.");
+                        break;
+                }
+
+                continue;
             }
-            else if (parts[i] == "--author" && i + 1 < parts.Length)
-            {
-                author = parts[i + 1];
-                i++;
-            }
-            else if (int.TryParse(parts[i], out var parsedSize))
-                size = parsedSize;
-            else
-            {
-                if (string.IsNullOrEmpty(query))
-                    query = parts[i];
-                else
-                    query += " " + parts[i];
-            }
+
+            queryParts.Add(token);
         }
+
+        var query = string.Join(' ', queryParts).Trim();
 
         if (string.IsNullOrEmpty(query))
         {
@@ -150,6 +190,7 @@ class Program
 
         try
         {
+            // Выполняем запрос в ElasticSearch, передавая при необходимости смещение, фильтры и размер выдачи
             var result = await elasticSearchService.SearchAsync(query, 0, size, category, author);
             
             Console.WriteLine($"Найдено документов: {result.Total}");
@@ -159,6 +200,7 @@ class Program
             for (int i = 0; i < result.Documents.Count; i++)
             {
                 var doc = result.Documents[i];
+                // Для каждого результата пробуем показать подсветки; если их нет — выводим короткий фрагмент контента
                 var highlights = result.Highlights.ContainsKey(doc.Id) 
                     ? result.Highlights[doc.Id] 
                     : new List<string>();
@@ -176,12 +218,14 @@ class Program
                 
                 if (highlights.Any())
                 {
+                    // Подсветки нагляднее показывают, почему документ попал в выдачу
                     Console.WriteLine($"   Выделенные фрагменты:");
                     foreach (var highlight in highlights.Take(3))
                         Console.WriteLine($"     ...{highlight}...");
                 }
                 else if (!string.IsNullOrEmpty(doc.Content))
                 {
+                    // Если подсветок нет, выводим превью первых 200 символов текста
                     var preview = doc.Content.Length > 200 
                         ? doc.Content.Substring(0, 200) + "..." 
                         : doc.Content;
@@ -197,6 +241,165 @@ class Program
         }
 
         Console.WriteLine();
+    }
+
+    static void PrintSearchUsage()
+    {
+        Console.WriteLine("Использование: search <запрос> [category=<категория>] [author=<автор>] [size=<число>]");
+        Console.WriteLine("Теги: category=, author=, size= или --category, --author, --size");
+    }
+
+    static List<string> SplitArguments(string arguments)
+    {
+        var tokens = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(arguments))
+            return tokens;
+
+        // Простое разбиение по пробелам, кавычки не обязательны
+        // Значения в кавычках сохраняются как один токен, но кавычки не обязательны
+        var parts = arguments.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        
+        foreach (var part in parts)
+        {
+            // Убираем кавычки с краев, если они есть (для обратной совместимости)
+            var trimmed = part.Trim();
+            if ((trimmed.StartsWith('"') && trimmed.EndsWith('"')) ||
+                (trimmed.StartsWith('\'') && trimmed.EndsWith('\'')))
+            {
+                trimmed = trimmed.Substring(1, trimmed.Length - 2);
+            }
+            
+            if (!string.IsNullOrEmpty(trimmed))
+                tokens.Add(trimmed);
+        }
+
+        return tokens;
+    }
+
+    static bool TryParseSearchTag(string rawToken, out SearchTagType tagType, out string? inlineValue, out bool expectsNextValue)
+    {
+        tagType = default;
+        inlineValue = null;
+        expectsNextValue = false;
+
+        if (string.IsNullOrWhiteSpace(rawToken))
+            return false;
+
+        var token = NormalizeToken(rawToken);
+
+        if (TryMatchInlineTag(token, out tagType, out inlineValue))
+        {
+            inlineValue = inlineValue?.Trim();
+            return true;
+        }
+
+        if (TryMatchSeparatedTag(token, out tagType))
+        {
+            expectsNextValue = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    static string NormalizeToken(string token)
+    {
+        var trimmed = token.Trim();
+
+        while (trimmed.StartsWith("["))
+            trimmed = trimmed.Substring(1);
+
+        while (trimmed.EndsWith("]"))
+            trimmed = trimmed.Substring(0, trimmed.Length - 1);
+
+        return trimmed;
+    }
+
+    static bool TryMatchInlineTag(string token, out SearchTagType tagType, out string? inlineValue)
+    {
+        tagType = default;
+        inlineValue = null;
+
+        if (string.IsNullOrEmpty(token))
+            return false;
+
+        var normalized = token;
+        var dashCount = 0;
+        while (dashCount < normalized.Length && normalized[dashCount] == '-')
+            dashCount++;
+
+        if (dashCount > 0)
+            normalized = normalized.Substring(dashCount);
+
+        foreach (var separator in TagSeparators)
+        {
+            var separatorIndex = normalized.IndexOf(separator);
+            if (separatorIndex <= 0)
+                continue;
+
+            var alias = normalized.Substring(0, separatorIndex).Trim();
+            var value = normalized.Substring(separatorIndex + 1).Trim();
+
+            if (TryResolveTag(alias, out tagType))
+            {
+                inlineValue = value;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static bool TryMatchSeparatedTag(string token, out SearchTagType tagType)
+    {
+        tagType = default;
+
+        if (!token.StartsWith("--", StringComparison.Ordinal))
+            return false;
+
+        var alias = token.Substring(2).Trim();
+
+        return TryResolveTag(alias, out tagType);
+    }
+
+    static bool TryResolveTag(string candidate, out SearchTagType tagType)
+    {
+        if (candidate.Equals("category", StringComparison.OrdinalIgnoreCase))
+        {
+            tagType = SearchTagType.Category;
+            return true;
+        }
+
+        if (candidate.Equals("author", StringComparison.OrdinalIgnoreCase))
+        {
+            tagType = SearchTagType.Author;
+            return true;
+        }
+
+        if (candidate.Equals("size", StringComparison.OrdinalIgnoreCase))
+        {
+            tagType = SearchTagType.Size;
+            return true;
+        }
+
+        tagType = default;
+        return false;
+    }
+
+    static string GetTagLabel(SearchTagType tagType) => tagType switch
+    {
+        SearchTagType.Category => "category",
+        SearchTagType.Author => "author",
+        SearchTagType.Size => "size",
+        _ => "tag"
+    };
+
+    enum SearchTagType
+    {
+        Category,
+        Author,
+        Size
     }
 
     /// <summary>
@@ -216,10 +419,10 @@ class Program
             return;
         }
 
-        // Парсим опции
+        // Флаг --clear заставляет очистить существующий JSON перед сохранением новых статей
         bool clearJson = parts.Any(p => p == "--clear");
         
-        // Парсим количество статей (первый аргумент после "scrape")
+        // Определяем количество статей, перебирая оставшиеся токены, пока не встретим валидное число
         int maxArticles = 0;
         foreach (var part in parts.Skip(1))
         {
@@ -237,12 +440,12 @@ class Program
             return;
         }
         
-        // Определяем путь к корню проекта для работы с articles.json
+        // Определяем путь к корню решения, чтобы всегда сохранять статьи в один и тот же файл
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
         var projectRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
         var jsonFilePath = Path.Combine(projectRoot, "articles.json");
         
-        // Если указана опция --clear, очищаем файл перед началом скрапинга
+        // Очищаем файл заранее, если пользователь запросил явную перезапись
         if (clearJson)
         {
             File.WriteAllText(jsonFilePath, "[]");
@@ -252,8 +455,10 @@ class Program
         
         try
         {
+            // Создаём скрапер и сразу завернём его в using, чтобы корректно освободить ресурсы
             using var scraper = new Scraper.Services.Scraper();
         
+            // Сбор статей может занять время, поэтому выполняем его асинхронно
             var articles = await scraper.ScrapeArticlesAsync(maxArticles);
 
             Console.WriteLine();
@@ -265,7 +470,7 @@ class Program
                 return;
             }
 
-            // Проверяем на дубликаты URL
+            // Дополнительно проверяем наличие дубликатов URL и удаляем их, чтобы индекс не разрастался
             var duplicateGroups = articles
                 .GroupBy(a => a.Url)
                 .Where(g => g.Count() > 1)
@@ -288,28 +493,28 @@ class Program
                 Console.WriteLine();
             }
 
-            // Сохраняем статьи в JSON файл
+            // После очистки и дедупликации сохраняем итоговый список в JSON
             
             var scraperUtils = new Scraper.Services.ScraperUtils();
             await scraperUtils.SaveToJsonAsync(articles, jsonFilePath);
 
 
-            // Всегда индексируем статьи
+            // Далее автоматически переиндексируем ElasticSearch, чтобы свежие данные стали доступны в поиске
             Console.WriteLine();
             Console.WriteLine("Начало индексации в ElasticSearch...");
             
-            // Очищаем индекс перед индексацией
+            // Перед индексацией гарантированно удаляем старый индекс, чтобы избежать конфликтов схемы
             Console.WriteLine("Очистка индекса перед индексацией...");
             await elasticSearchService.DeleteIndexAsync();
             
-            // Создаем индекс, если его нет
+            // Создаём новый индекс с корректным маппингом перед загрузкой документов
             if (!await elasticSearchService.EnsureIndexExistsAsync())
             {
                 Console.WriteLine("Ошибка при создании индекса!");
                 return;
             }
 
-            // Индексируем статьи пакетами
+            // Индексируем статьи пакетами, чтобы не перегружать кластер
             const int batchSize = 100;
             int totalIndexed = 0;
             int totalDuplicatesRemoved = 0;
@@ -317,9 +522,9 @@ class Program
             for (int i = 0; i < articles.Count; i += batchSize)
             {
                 var batch = articles.Skip(i).Take(batchSize).ToList();
-                var (success, indexedCount, duplicatesRemoved) = await elasticSearchService.IndexArticlesAsync(batch);
+                // ElasticSearchService возвращает, сколько документов реально попало в индекс
+                var (success, indexedCount) = await elasticSearchService.IndexArticlesAsync(batch);
                 totalIndexed += indexedCount;
-                totalDuplicatesRemoved += duplicatesRemoved;
                 Console.WriteLine($"Проиндексировано: {totalIndexed} из {articles.Count}");
             }
 
@@ -334,7 +539,7 @@ class Program
             // Даем ElasticSearch время обновить индекс перед проверкой
             await Task.Delay(1000);
             
-            // Проверяем фактическое количество документов в индексе
+            // Сверяем отчёт по индексации с фактическим количеством документов
             var totalDocs = await elasticSearchService.GetTotalDocumentsAsync();
             Console.WriteLine($"Всего документов в индексе: {totalDocs}");
             
@@ -352,6 +557,7 @@ class Program
             Console.WriteLine($"Ошибка при скрапинге: {ex.Message}");
             if (ex.StackTrace != null)
                 Console.WriteLine($"Стек вызовов: {ex.StackTrace}");
+            // Даже при ошибке оставляем пустую строку, чтобы визуально отделить события
         }
 
         Console.WriteLine();
@@ -397,6 +603,7 @@ class Program
                 return;
             }
 
+            // Переиспользуем сервис индексации, который уже содержит всю логику разбора JSON
             await indexingService.IndexArticlesFromJsonAsync(jsonFilePath);
             
             // Показываем общее количество документов в индексе после индексации
