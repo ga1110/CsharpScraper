@@ -1,4 +1,8 @@
 using Elastic.Clients.Elasticsearch;
+using Elastic.Clients.Elasticsearch.Analysis;
+using Elastic.Clients.Elasticsearch.Core;
+using Elastic.Clients.Elasticsearch.IndexManagement;
+using Elastic.Clients.Elasticsearch.Mapping;
 using Elastic.Clients.Elasticsearch.QueryDsl;
 using Elastic.Transport;
 using Scraper.Models;
@@ -18,8 +22,11 @@ public class ElasticSearchService
 {
     private readonly ElasticsearchClient _client;
     private const string _indexName = "articles";
+    private const string DefaultConnectionString = "http://localhost:9200";
+    private const string ConnectionStringEnvVar = "ELASTICSEARCH_CONNECTION";
+
     private static readonly string _connectionString =
-        Environment.GetEnvironmentVariable("ELASTICSEARCH_URL") ?? "https://localhost:9200";
+        Environment.GetEnvironmentVariable(ConnectionStringEnvVar) ?? DefaultConnectionString;
     /// <summary>
     /// Инициализирует новый экземпляр ElasticSearchService с указанным адресом ElasticSearch сервера
     /// </summary>
@@ -30,8 +37,7 @@ public class ElasticSearchService
     {
         var uri = new Uri(_connectionString);
         var settings = new ElasticsearchClientSettings(uri)
-            .DefaultIndex(_indexName)
-            .EnableDebugMode();
+            .DefaultIndex(_indexName);
 
         // Настраиваем SSL для HTTPS подключений
         if (uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
@@ -60,21 +66,61 @@ public class ElasticSearchService
             if (!existsResponse.Exists)
             {
                 // Описываем схему индекса: типы полей, ключевые слова, текстовые поля и т.д.
-                var createResponse = await _client.Indices.CreateAsync(_indexName, c => c
-                    .Mappings(m => m
-                        .Properties<ArticleDocument>(p => p
-                            .Keyword(k => k.Id)
-                            .Text(t => t.Title)
-                            .Keyword(k => k.Url)
-                            .Text(t => t.Content)
-                            .Keyword(k => k.Category)
-                            .Date(d => d.PublishDate)
-                            .Keyword(k => k.Author)
-                            .IntegerNumber(n => n.CommentCount)
-                            .Keyword(k => k.ImageUrl)
-                        )
-                    )
-                );
+                var createRequest = new CreateIndexRequest(_indexName)
+                {
+                    Settings = new IndexSettings
+                    {
+                        Analysis = new IndexSettingsAnalysis
+                        {
+                            Normalizers = new Normalizers
+                            {
+                                ["ru_keyword_lower"] = new CustomNormalizer
+                                {
+                                    Filter = new[] { "lowercase" }
+                                }
+                            },
+                            Analyzers = new Analyzers
+                            {
+                                ["ru_text"] = new CustomAnalyzer
+                                {
+                                    Tokenizer = "standard",
+                                    Filter = new[] { "lowercase", "russian_stop", "russian_morphology" }
+                                }
+                            }
+                        }
+                    },
+                    Mappings = new TypeMapping
+                    {
+                        Properties = new Properties
+                        {
+                            ["id"] = new KeywordProperty(),
+                            ["title"] = new TextProperty
+                            {
+                                Analyzer = "ru_text",
+                                SearchAnalyzer = "ru_text"
+                            },
+                            ["url"] = new KeywordProperty(),
+                            ["content"] = new TextProperty
+                            {
+                                Analyzer = "ru_text",
+                                SearchAnalyzer = "ru_text"
+                            },
+                            ["category"] = new KeywordProperty
+                            {
+                                Normalizer = "ru_keyword_lower"
+                            },
+                            ["publishDate"] = new DateProperty(),
+                            ["author"] = new KeywordProperty
+                            {
+                                Normalizer = "ru_keyword_lower"
+                            },
+                            ["commentCount"] = new IntegerNumberProperty(),
+                            ["imageUrl"] = new KeywordProperty()
+                        }
+                    }
+                };
+
+                var createResponse = await _client.Indices.CreateAsync(createRequest);
 
                 if (!createResponse.IsValidResponse)
                 {
@@ -127,20 +173,11 @@ public class ElasticSearchService
     public async Task<bool> IndexArticleAsync(Article article)
     {
         // Преобразуем модель скрапера в документ, подходящий для ElasticSearch
-        var document = new ArticleDocument
-        {
-            Id = GenerateArticleId(article.Url),
-            Title = article.Title,
-            Url = article.Url,
-            Content = article.Content,
-            Category = article.Category,
-            PublishDate = article.PublishDate,
-            Author = article.Author,
-            CommentCount = article.CommentCount,
-            ImageUrl = article.ImageUrl
-        };
+        var document = MapArticleToDocument(article);
 
-        var response = await _client.IndexAsync(document, _indexName, document.Id);
+        var response = await _client.IndexAsync(document, i => i
+            .Index(_indexName)
+            .Id(document.Id));
 
         // Возвращаем флаг успешности, чтобы вызывающий код мог отреагировать на ошибки
         return response.IsValidResponse;
@@ -165,18 +202,7 @@ public class ElasticSearchService
     public async Task<(bool Success, int IndexedCount)> IndexArticlesAsync(List<Article> articles)
     {
         // Сначала проектируем список документов с предсказуемыми ID и нужными полями
-        var documents = articles.Select(article => new ArticleDocument
-        {
-            Id = GenerateArticleId(article.Url),
-            Title = article.Title,
-            Url = article.Url,
-            Content = article.Content,
-            Category = article.Category,
-            PublishDate = article.PublishDate,
-            Author = article.Author,
-            CommentCount = article.CommentCount,
-            ImageUrl = article.ImageUrl
-        }).ToList();
+        var documents = articles.Select(MapArticleToDocument).ToList();
 
         // Упрощенный подход: индексируем документы пакетами используя IndexAsync
         const int batchSize = 100;
@@ -194,7 +220,9 @@ public class ElasticSearchService
                 try
                 {
                     // Каждый документ отправляем отдельным запросом — так проще обрабатывать ошибки на учебном проекте
-                    var response = await _client.IndexAsync(doc, _indexName, doc.Id);
+                    var response = await _client.IndexAsync(doc, i => i
+                        .Index(_indexName)
+                        .Id(doc.Id));
                     if (response.IsValidResponse)
                         successCount++;
                     else
@@ -251,6 +279,22 @@ public class ElasticSearchService
         return (allSuccess, successCount);
     }
 
+    private ArticleDocument MapArticleToDocument(Article article)
+    {
+        return new ArticleDocument
+        {
+            Id = GenerateArticleId(article.Url),
+            Title = TextPreprocessor.Normalize(article.Title),
+            Url = article.Url,
+            Content = TextPreprocessor.Normalize(article.Content),
+            Category = TextPreprocessor.Normalize(article.Category),
+            PublishDate = article.PublishDate,
+            Author = TextPreprocessor.Normalize(article.Author),
+            CommentCount = article.CommentCount,
+            ImageUrl = article.ImageUrl
+        };
+    }
+
     /// <summary>
     /// Выполняет полнотекстовый поиск статей с поддержкой фильтров по категории и автору, возвращая результаты с подсветкой совпадений
     /// </summary>
@@ -284,18 +328,16 @@ public class ElasticSearchService
             if (!string.IsNullOrEmpty(category))
             {
                 // Фильтр по категории делаем через TermQuery, чтобы искать точные совпадения
-                filters.Add(new TermQuery
+                filters.Add(new TermQuery("category")
                 {
-                    Field = "category",
                     Value = category
                 });
             }
 
             if (!string.IsNullOrEmpty(author))
             {
-                filters.Add(new TermQuery
+                filters.Add(new TermQuery("author")
                 {
-                    Field = "author",
                     Value = author
                 });
             }
@@ -370,10 +412,33 @@ public class ElasticSearchService
         {
             // Метод Ping делает HEAD-запрос к корню сервера и возвращает true при HTTP 200
             var response = await _client.PingAsync();
+
+            if (!response.IsValidResponse)
+            {
+                Console.WriteLine("ElasticSearch вернул некорректный ответ на Ping.");
+
+                if (response.ElasticsearchServerError != null)
+                {
+                    var error = response.ElasticsearchServerError.Error;
+                    Console.WriteLine($"Ошибка сервера: {error?.Reason}");
+                    if (error?.RootCause != null && error.RootCause.Count > 0)
+                    {
+                        foreach (var cause in error.RootCause)
+                            Console.WriteLine($"  Причина: {cause.Reason}");
+                    }
+                }
+                else if (!string.IsNullOrEmpty(response.DebugInformation))
+                    Console.WriteLine($"Детали: {response.DebugInformation}");
+            }
+
             return response.IsValidResponse;
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine("Исключение при проверке подключения к ElasticSearch.");
+            Console.WriteLine($"Ошибка: {ex.Message}");
+            if (ex.InnerException != null)
+                Console.WriteLine($"Внутренняя ошибка: {ex.InnerException.Message}");
             return false;
         }
     }

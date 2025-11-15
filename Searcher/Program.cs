@@ -12,11 +12,12 @@ namespace Searcher;
 class Program
 {
     private static readonly char[] TagSeparators = new[] { '=', ':' };
+    private static readonly StopWordsProvider StopWords = StopWordsProvider.CreateDefault();
 
     /// <summary>
     /// Точка входа в приложение. Поддерживает два режима: индексацию статей (index) и интерактивный поиск
     /// </summary>
-    /// <param name="args">Аргументы командной строки: "index <путь_к_json>" для индексации или без аргументов для поиска</param>
+
     static async Task Main(string[] args)
     {
         // Включаем поддержку UTF-8 в консоли, чтобы корректно отображать русские тексты и подсветки
@@ -57,14 +58,12 @@ class Program
             return;
         }
 
-        // Режим "index <path>" позволяет индексировать заранее подготовленный JSON без запуска интерактивного меню
         if (args.Length > 0 && args[0] == "index" && args.Length > 1)
         {
             await indexingService.IndexArticlesFromJsonAsync(args[1]);
             return;
         }
 
-        // Иначе переходим в интерактивный режим, где доступны команды scrape/index/search
         Console.WriteLine("Поисковик статей");
         Console.WriteLine("Введите команды:");
         Console.WriteLine("  scrape <количество> [--clear] - скрапить статьи и проиндексировать в ElasticSearch");
@@ -154,10 +153,10 @@ class Program
                 switch (tagType)
                 {
                     case SearchTagType.Category:
-                        category = tagValue;
+                        category = TextPreprocessor.NormalizeOrNull(tagValue);
                         break;
                     case SearchTagType.Author:
-                        author = tagValue;
+                        author = TextPreprocessor.NormalizeOrNull(tagValue);
                         break;
                     case SearchTagType.Size:
                         if (int.TryParse(tagValue, out var parsedSize) && parsedSize > 0)
@@ -170,7 +169,12 @@ class Program
                 continue;
             }
 
-            queryParts.Add(token);
+            var normalizedToken = TextPreprocessor.Normalize(token);
+            if (StopWords.IsStopWord(normalizedToken))
+                continue;
+
+            if (!string.IsNullOrEmpty(normalizedToken))
+                queryParts.Add(normalizedToken);
         }
 
         var query = string.Join(' ', queryParts).Trim();
