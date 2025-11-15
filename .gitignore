@@ -39,12 +39,4 @@ project.fragment.lock.json
 artifacts/
 
 # Output files
-*.json
 !project.assets.json
-*.csv
-articles.json
-articles.csv
-
-
-
-

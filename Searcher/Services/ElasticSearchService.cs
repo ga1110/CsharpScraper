@@ -84,7 +84,7 @@ public class ElasticSearchService
                                 ["ru_text"] = new CustomAnalyzer
                                 {
                                     Tokenizer = "standard",
-                                    Filter = new[] { "lowercase", "russian_stop", "russian_morphology" }
+                                    Filter = new[] { "lowercase", "stop" }
                                 }
                             }
                         }
