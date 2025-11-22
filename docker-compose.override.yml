@@ -1,0 +1,38 @@
+# Дополнительные настройки для разработки и миграции данных
+version: '3.8'
+
+services:
+  elasticsearch:
+    # Дополнительные переменные окружения для бэкапов
+    environment:
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      # Включаем snapshot repository для более продвинутых бэкапов
+      - path.repo=/usr/share/elasticsearch/backups
+    volumes:
+      # Дополнительный volume для снапшотов
+      - elasticsearch_backups:/usr/share/elasticsearch/backups
+      # Bind mount для прямого доступа к данным
+      - ./elasticsearch_data:/usr/share/elasticsearch/data
+    # Порты для мониторинга (опционально)
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+
+  # Дополнительный сервис для управления бэкапами
+  elasticsearch-backup:
+    image: curlimages/curl:latest
+    depends_on:
+      - elasticsearch
+    volumes:
+      - ./scripts:/scripts
+      - ./elasticsearch_backup:/backup
+      - elasticsearch_backups:/snapshots
+    networks:
+      - scraper-network
+    profiles:
+      - backup
+    command: tail -f /dev/null  # Держим контейнер запущенным
+
+volumes:
+  elasticsearch_backups:
+    driver: local

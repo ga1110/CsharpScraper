@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using Searcher.Services;
 using Scraper.Models;
@@ -13,6 +14,8 @@ class Program
 {
     private static readonly char[] TagSeparators = new[] { '=', ':' };
     private static readonly StopWordsProvider StopWords = StopWordsProvider.CreateDefault();
+    private static readonly SynonymProvider Synonyms = new SynonymProvider();
+    private static CompositeSpellChecker? CompositeSpellChecker;
 
     /// <summary>
     /// Точка входа в приложение. Поддерживает два режима: индексацию статей (index) и интерактивный поиск
@@ -24,12 +27,53 @@ class Program
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         Console.InputEncoding = System.Text.Encoding.UTF8;
 
+        // Загружаем синонимы при старте (из корня проекта)
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        var projectRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
+        var synonymsPath = Path.GetFullPath(Path.Combine(projectRoot, "synonyms.json"));
+        
+        // Если файл не найден в корне, пробуем в текущей директории (для обратной совместимости)
+        if (!File.Exists(synonymsPath))
+        {
+            var localPath = Path.GetFullPath("synonyms.json");
+            if (File.Exists(localPath))
+            {
+                synonymsPath = localPath;
+            }
+        }
+        
+        Synonyms.LoadFromFile(synonymsPath);
+
+        if (args.Length > 0 && args[0].Equals("mine-synonyms", StringComparison.OrdinalIgnoreCase))
+        {
+            var command = string.Join(' ', args);
+            await HandleMineSynonymsCommand(command, Synonyms);
+            return;
+        }
+
         // Подготавливаем сервисы ElasticSearch и индексации, чтобы использовать их в обоих режимах работы
         var elasticSearchService = new ElasticSearchService(
             username: "elastic",
-            password: "muVmg+YxSgExd2NKBttV"
+            password: "muVmg+YxSgExd2NKBttV",
+            synonymProvider: Synonyms
         );
         var indexingService = new IndexingService(elasticSearchService);
+
+        // Инициализируем композитный проверщик орфографии
+        CompositeSpellChecker = new CompositeSpellChecker(searchService: elasticSearchService);
+        
+        // Пытаемся добавить Ollama, если доступна
+        var ollamaChecker = await OllamaSpellChecker.TryCreateAsync();
+        if (ollamaChecker != null)
+        {
+            CompositeSpellChecker.AddChecker(ollamaChecker);
+            Console.WriteLine("Ollama spell checker подключен");
+        }
+        else
+        {
+            Console.WriteLine("Ollama недоступна, используем только традиционные методы");
+        }
+        var backupService = new ElasticsearchBackupService(elasticSearchService.Client);
 
         // Перед работой проверяем доступность кластера и сообщаем пользователю диагностическую информацию
         Console.WriteLine("Проверка подключения к ElasticSearch");
@@ -68,8 +112,12 @@ class Program
         Console.WriteLine("Введите команды:");
         Console.WriteLine("  scrape <количество> [--clear] - скрапить статьи и проиндексировать в ElasticSearch");
         Console.WriteLine("  index - проиндексировать статьи из articles.json ");
-        Console.WriteLine("  search <запрос> [category=<категория>] [author=<автор>] [size=10] - единый поиск с тегами");
-        Console.WriteLine("     Теги: category=, author=, size= или --category, --author, --size");
+        Console.WriteLine("  mine-synonyms [--force] [--threshold=<значение>] - автоматический майнинг синонимов");
+        Console.WriteLine("  search <запрос> [category=<категория>] [author=<автор>] [size=10] [synmin=0.5] - единый поиск с тегами");
+        Console.WriteLine("     Теги: category=, author=, size=, synmin= или --category, --author, --size, --synmin");
+        Console.WriteLine("  backup - создать бэкап индекса в папке backup (заменяет предыдущий)");
+        Console.WriteLine("  restore [--force] - восстановить индекс из папки backup");
+        Console.WriteLine("  stats - показать статистику spell checker");
         Console.WriteLine("  exit - выход");
         Console.WriteLine();
 
@@ -90,11 +138,23 @@ class Program
             else if (input.ToLower().Trim() == "index")
                 // Команда index переиспользует существующий JSON, чтобы быстро перестроить индекс
                 await HandleIndexCommand(indexingService, elasticSearchService);
+            else if (input.ToLower().StartsWith("mine-synonyms"))
+                // Команда mine-synonyms запускает автоматический майнинг синонимов
+                await HandleMineSynonymsCommand(input, Synonyms);
             else if (input.ToLower().StartsWith("search "))
                 // Команда search выполняет полнотекстовый поиск и выводит результаты в консоль
-                await HandleSearchCommand(input, elasticSearchService);
+                await HandleSearchCommand(input, elasticSearchService, Synonyms);
+            else if (input.ToLower().StartsWith("backup"))
+                // Команда backup создает бэкап индекса
+                await HandleBackupCommand(input, backupService);
+            else if (input.ToLower().StartsWith("restore"))
+                // Команда restore восстанавливает индекс из бэкапа
+                await HandleRestoreCommand(input, backupService);
+            else if (input.ToLower().Trim() == "stats")
+                // Команда stats показывает статистику spell checker
+                HandleStatsCommand();
             else
-                Console.WriteLine("Неизвестная команда. Используйте 'scrape <количество>', 'index', 'search <запрос>' или 'exit'");
+                Console.WriteLine("Неизвестная команда. Используйте 'scrape', 'index', 'mine-synonyms', 'search', 'backup', 'restore', 'stats' или 'exit'");
         }
     }
 
@@ -103,7 +163,8 @@ class Program
     /// </summary>
     /// <param name="command">Строка команды поиска в формате "search <запрос> [category=<категория>] [author=<автор>] [size=<число>]"</param>
     /// <param name="elasticSearchService">Сервис для выполнения поиска в ElasticSearch</param>
-    static async Task HandleSearchCommand(string command, ElasticSearchService elasticSearchService)
+    /// <param name="synonyms">Провайдер синонимов для расширения запросов</param>
+    static async Task HandleSearchCommand(string command, ElasticSearchService elasticSearchService, SynonymProvider synonyms)
     {
         var arguments = command.Length > "search".Length
             ? command.Substring("search".Length).Trim()
@@ -127,6 +188,7 @@ class Program
         int size = 10;
         string? category = null;
         string? author = null;
+        double? synonymConfidence = null;
 
         for (int i = 0; i < tokens.Count; i++)
         {
@@ -164,6 +226,16 @@ class Program
                         else
                             Console.WriteLine($"Размер должен быть положительным числом. Игнорируем значение '{tagValue}'.");
                         break;
+                    case SearchTagType.SynonymConfidence:
+                        if (double.TryParse(tagValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedThreshold))
+                        {
+                            synonymConfidence = Math.Clamp(parsedThreshold, 0.0, 1.0);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Порог синонимов должен быть числом между 0 и 1. Игнорируем '{tagValue}'.");
+                        }
+                        break;
                 }
 
                 continue;
@@ -185,17 +257,48 @@ class Program
             return;
         }
 
-        Console.WriteLine($"Поиск: '{query}' (результатов: {size})");
+        if (CompositeSpellChecker != null && query.Length >= 3)
+        {
+            try
+            {
+                var correction = await CompositeSpellChecker.TryCorrectAsync(query);
+                if (correction.HasCorrection)
+                {
+                    query = correction.CorrectedQuery;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при исправлении опечаток: {ex.Message}");
+            }
+        }
+
+        // Расширяем запрос синонимами
+        var expandedQuery = synonyms.ExpandQuery(query, synonymConfidence);
+        
+        Console.WriteLine($"Поиск: '{expandedQuery}' (результатов: {size})");
         if (!string.IsNullOrEmpty(category))
             Console.WriteLine($"Категория: {category}");
         if (!string.IsNullOrEmpty(author))
             Console.WriteLine($"Автор: {author}");
+        if (synonymConfidence.HasValue)
+            Console.WriteLine($"Минимальная уверенность синонимов: {synonymConfidence.Value:F2}");
         Console.WriteLine();
 
         try
         {
             // Выполняем запрос в ElasticSearch, передавая при необходимости смещение, фильтры и размер выдачи
-            var result = await elasticSearchService.SearchAsync(query, 0, size, category, author);
+            var result = await elasticSearchService.SearchAsync(expandedQuery, 0, size, category, author);
+            
+            // Записываем статистику для обучения spell checker
+            var analyticsChecker = CompositeSpellChecker?._checkers?.OfType<SearchAnalyticsSpellChecker>().FirstOrDefault();
+            if (analyticsChecker != null)
+            {
+                var wasSuccessful = result.Total > 0;
+                var originalQuery = arguments.Split(' ').Where(t => !t.Contains('=')).FirstOrDefault() ?? query;
+                var correctedFrom = !string.Equals(originalQuery, expandedQuery, StringComparison.OrdinalIgnoreCase) ? originalQuery : null;
+                analyticsChecker.RecordSearch(expandedQuery, (int)result.Total, wasSuccessful, correctedFrom);
+            }
             
             Console.WriteLine($"Найдено документов: {result.Total}");
             Console.WriteLine($"Показано: {result.Documents.Count}");
@@ -249,8 +352,8 @@ class Program
 
     static void PrintSearchUsage()
     {
-        Console.WriteLine("Использование: search <запрос> [category=<категория>] [author=<автор>] [size=<число>]");
-        Console.WriteLine("Теги: category=, author=, size= или --category, --author, --size");
+        Console.WriteLine("Использование: search <запрос> [category=<категория>] [author=<автор>] [size=<число>] [synmin=<0-1>]");
+        Console.WriteLine("Теги: category=, author=, size=, synmin= или --category, --author, --size, --synmin");
     }
 
     static List<string> SplitArguments(string arguments)
@@ -387,6 +490,15 @@ class Program
             return true;
         }
 
+        if (candidate.Equals("synmin", StringComparison.OrdinalIgnoreCase) ||
+            candidate.Equals("synconf", StringComparison.OrdinalIgnoreCase) ||
+            candidate.Equals("synconfidence", StringComparison.OrdinalIgnoreCase) ||
+            candidate.Equals("synonymconfidence", StringComparison.OrdinalIgnoreCase))
+        {
+            tagType = SearchTagType.SynonymConfidence;
+            return true;
+        }
+
         tagType = default;
         return false;
     }
@@ -396,6 +508,7 @@ class Program
         SearchTagType.Category => "category",
         SearchTagType.Author => "author",
         SearchTagType.Size => "size",
+        SearchTagType.SynonymConfidence => "synmin",
         _ => "tag"
     };
 
@@ -403,7 +516,8 @@ class Program
     {
         Category,
         Author,
-        Size
+        Size,
+        SynonymConfidence
     }
 
     /// <summary>
@@ -475,28 +589,6 @@ class Program
             }
 
             // Дополнительно проверяем наличие дубликатов URL и удаляем их, чтобы индекс не разрастался
-            var duplicateGroups = articles
-                .GroupBy(a => a.Url)
-                .Where(g => g.Count() > 1)
-                .ToList();
-            
-            if (duplicateGroups.Any())
-            {
-                Console.WriteLine();
-                Console.WriteLine($"Обнаружено дубликатов URL: {duplicateGroups.Count} уникальных URL встречаются несколько раз");
-                Console.WriteLine($"   Всего дубликатов: {duplicateGroups.Sum(g => g.Count() - 1)}");
-                Console.WriteLine("Удаляем дубликаты, оставляя только первую статью для каждого URL...");
-                
-                // Удаляем дубликаты, оставляя первую статью для каждого URL
-                articles = articles
-                    .GroupBy(a => a.Url)
-                    .Select(g => g.First())
-                    .ToList();
-                
-                Console.WriteLine($"После удаления дубликатов: {articles.Count} уникальных статей");
-                Console.WriteLine();
-            }
-
             // После очистки и дедупликации сохраняем итоговый список в JSON
             
             var scraperUtils = new Scraper.Services.ScraperUtils();
@@ -505,10 +597,10 @@ class Program
 
             // Далее автоматически переиндексируем ElasticSearch, чтобы свежие данные стали доступны в поиске
             Console.WriteLine();
-            Console.WriteLine("Начало индексации в ElasticSearch...");
+            Console.WriteLine("Начало индексации в ElasticSearch");
             
             // Перед индексацией гарантированно удаляем старый индекс, чтобы избежать конфликтов схемы
-            Console.WriteLine("Очистка индекса перед индексацией...");
+            Console.WriteLine("Очистка индекса перед индексацией");
             await elasticSearchService.DeleteIndexAsync();
             
             // Создаём новый индекс с корректным маппингом перед загрузкой документов
@@ -619,6 +711,220 @@ class Program
             Console.WriteLine($"Ошибка при индексации: {ex.Message}");
             if (ex.StackTrace != null)
                 Console.WriteLine($"Стек вызовов: {ex.StackTrace}");
+        }
+
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Обрабатывает команду майнинга синонимов из статей.
+    /// </summary>
+    /// <param name="command">Строка команды в формате "mine-synonyms [--force] [--threshold=<значение>]"</param>
+    /// <param name="synonyms">Провайдер синонимов для сохранения результатов</param>
+    static async Task HandleMineSynonymsCommand(string command, SynonymProvider synonyms)
+    {
+        var parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        bool force = parts.Any(p => p == "--force" || p.ToLower() == "-f");
+        
+        double? customThreshold = null;
+        foreach (var part in parts)
+        {
+            if (part.StartsWith("--threshold=", StringComparison.OrdinalIgnoreCase))
+            {
+                var thresholdStr = part.Substring("--threshold=".Length);
+                if (double.TryParse(thresholdStr, System.Globalization.NumberStyles.Float, 
+                    System.Globalization.CultureInfo.InvariantCulture, out var threshold))
+                {
+                    customThreshold = threshold;
+                }
+            }
+        }
+
+        // Определяем путь к articles.json
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        var projectRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
+        var jsonFilePath = Path.Combine(projectRoot, "articles.json");
+
+        if (!File.Exists(jsonFilePath))
+        {
+            jsonFilePath = "articles.json";
+        }
+
+        if (!File.Exists(jsonFilePath))
+        {
+            Console.WriteLine($"Файл articles.json не найден!");
+            Console.WriteLine($"Искали в: {Path.GetFullPath(jsonFilePath)}");
+            Console.WriteLine("Сначала выполните команду 'scrape <количество>' для сбора статей.");
+            return;
+        }
+
+        // Определяем путь для сохранения синонимов (всегда в корне проекта)
+        var synonymsPath = Path.GetFullPath(Path.Combine(projectRoot, "synonyms.json"));
+        
+        // Убеждаемся, что директория существует
+        var directory = Path.GetDirectoryName(synonymsPath);
+        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        // Проверяем, есть ли уже файл синонимов
+        if (File.Exists(synonymsPath) && !force)
+        {
+            Console.WriteLine($"Файл синонимов уже существует: {synonymsPath}");
+            Console.WriteLine("Используйте --force для пересчета синонимов.");
+            Console.WriteLine();
+            
+            // Загружаем существующие синонимы
+            synonyms.LoadFromFile(synonymsPath);
+            Console.WriteLine($"Загружено {synonyms.GroupCount} групп синонимов.");
+            return;
+        }
+
+        Console.WriteLine("Майнинг синонимов");
+        Console.WriteLine($"Анализируем статьи из: {jsonFilePath}");
+        Console.WriteLine($"Результаты будут сохранены в: {synonymsPath}");
+        if (customThreshold.HasValue)
+        {
+            Console.WriteLine($"Порог схожести: {customThreshold.Value}");
+        }
+        Console.WriteLine();
+
+        try
+        {
+            var miner = new SynonymMiner();
+            var options = MiningOptions.CreateDefault();
+            
+            if (customThreshold.HasValue)
+            {
+                options.MinSimilarityThreshold = Math.Max(0.0, Math.Min(1.0, customThreshold.Value));
+            }
+
+            var synonymData = await miner.MineFromJsonFileAsync(jsonFilePath, options);
+
+            if (synonymData.Synonyms.Count == 0)
+            {
+                Console.WriteLine("Синонимы не найдены. Попробуйте:");
+                Console.WriteLine("  - Снизить порог схожести: mine-synonyms --threshold=0.15");
+                Console.WriteLine("  - Убедиться, что в articles.json достаточно статей");
+                return;
+            }
+
+            // Сохраняем результаты
+            synonymData.LastUpdated = DateTime.UtcNow;
+            synonyms.SaveToFile(synonymData, synonymsPath);
+            synonyms.LoadFromData(synonymData);
+
+            Console.WriteLine();
+            Console.WriteLine("Майнинг синонимов завершен");
+            Console.WriteLine($"Найдено групп синонимов: {synonymData.TotalGroups}");
+            if (synonymData.Statistics != null)
+            {
+                Console.WriteLine($"Всего пар: {synonymData.Statistics.TotalPairs}");
+                Console.WriteLine($"Средняя схожесть: {synonymData.Statistics.AvgSimilarity:F3}");
+            }
+            Console.WriteLine($"Синонимы сохранены в: {synonymsPath}");
+            Console.WriteLine("Теперь они будут автоматически использоваться при поиске.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при майнинге синонимов: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Детали: {ex.InnerException.Message}");
+            }
+            if (ex.StackTrace != null)
+            {
+                Console.WriteLine($"Стек вызовов: {ex.StackTrace}");
+            }
+        }
+
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Обрабатывает команду создания бэкапа
+    /// </summary>
+    /// <param name="command">Строка команды в формате "backup [путь]"</param>
+    /// <param name="backupService">Сервис для создания бэкапов</param>
+    static async Task HandleBackupCommand(string command, ElasticsearchBackupService backupService)
+    {
+        Console.WriteLine("Создание бэкапа...");
+        
+        try
+        {
+            var backupPath = await backupService.CreateBackupAsync();
+            Console.WriteLine($"Бэкап создан: {backupPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка создания бэкапа: {ex.Message}");
+        }
+        
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Обрабатывает команду восстановления из бэкапа
+    /// </summary>
+    /// <param name="command">Строка команды в формате "restore <путь> [--force]"</param>
+    /// <param name="backupService">Сервис для восстановления бэкапов</param>
+    static async Task HandleRestoreCommand(string command, ElasticsearchBackupService backupService)
+    {
+        var parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var force = parts.Any(p => p == "--force");
+        
+        try
+        {
+            Console.WriteLine("Восстановление из папки backup...");
+            await backupService.RestoreBackupAsync(force: force);
+            Console.WriteLine("Восстановление завершено");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка восстановления: {ex.Message}");
+        }
+        
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Показывает статистику работы spell checker
+    /// </summary>
+    static void HandleStatsCommand()
+    {
+        Console.WriteLine("Статистика Spell Checker");
+        Console.WriteLine(new string('=', 40));
+
+        if (CompositeSpellChecker == null)
+        {
+            Console.WriteLine("Spell checker не инициализирован");
+            return;
+        }
+
+        var stats = CompositeSpellChecker.GetStats();
+        Console.WriteLine($"Активных проверщиков: {stats.CheckersCount}");
+        Console.WriteLine($"Кэш: {stats.CacheSize}/{stats.MaxCacheSize}");
+        Console.WriteLine();
+
+        Console.WriteLine("Доступные методы:");
+        foreach (var checkerName in stats.CheckerNames)
+        {
+            Console.WriteLine($"  - {checkerName}");
+        }
+
+        // Показываем статистику аналитики, если доступна
+        var analyticsChecker = CompositeSpellChecker._checkers?.OfType<SearchAnalyticsSpellChecker>().FirstOrDefault();
+        if (analyticsChecker != null)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Аналитика поиска:");
+            var analyticsStats = analyticsChecker.GetAnalyticsStats();
+            Console.WriteLine($"  Уникальных запросов: {analyticsStats.TotalUniqueQueries}");
+            Console.WriteLine($"  Всего поисков: {analyticsStats.TotalSearches}");
+            Console.WriteLine($"  Успешных запросов: {analyticsStats.SuccessfulQueries}");
+            Console.WriteLine($"  Выученных исправлений: {analyticsStats.LearnedCorrections}");
+            Console.WriteLine($"  Общий успех: {analyticsStats.SuccessRate:P1}");
         }
 
         Console.WriteLine();

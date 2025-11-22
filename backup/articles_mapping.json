@@ -1,0 +1,32 @@
+{
+  "mappings": {
+    "properties": {
+      "id": {
+        "type": "keyword"
+      },
+      "title": {
+        "type": "text",
+        "analyzer": "ru_text"
+      },
+      "content": {
+        "type": "text",
+        "analyzer": "ru_text"
+      },
+      "url": {
+        "type": "keyword"
+      },
+      "category": {
+        "type": "keyword"
+      },
+      "author": {
+        "type": "keyword"
+      },
+      "publishDate": {
+        "type": "date"
+      },
+      "commentCount": {
+        "type": "integer"
+      }
+    }
+  }
+}

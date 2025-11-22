@@ -40,3 +40,12 @@ artifacts/
 
 # Output files
 !project.assets.json
+
+# Elasticsearch data and backups
+elasticsearch_data/
+elasticsearch_backup/
+backups/
+temp_restore_*/
+
+# Docker volumes
+.docker/

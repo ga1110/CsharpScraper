@@ -21,6 +21,12 @@ namespace Searcher.Services;
 public class ElasticSearchService
 {
     private readonly ElasticsearchClient _client;
+    
+    /// <summary>
+    /// Клиент Elasticsearch для расширенных операций
+    /// </summary>
+    public ElasticsearchClient Client => _client;
+    private readonly SynonymProvider? _synonymProvider;
     private const string _indexName = "articles";
     private const string DefaultConnectionString = "http://localhost:9200";
     private const string ConnectionStringEnvVar = "ELASTICSEARCH_CONNECTION";
@@ -33,8 +39,9 @@ public class ElasticSearchService
     /// <param name="_connectionString">Строка подключения к ElasticSearch (по умолчанию "http://localhost:9200")</param>
     /// <param name="username">Имя пользователя для базовой аутентификации (опционально)</param>
     /// <param name="password">Пароль для базовой аутентификации (опционально)</param>
-    public ElasticSearchService(string? username = null, string? password = null)
+    public ElasticSearchService(string? username = null, string? password = null, SynonymProvider? synonymProvider = null)
     {
+        _synonymProvider = synonymProvider;
         var uri = new Uri(_connectionString);
         var settings = new ElasticsearchClientSettings(uri)
             .DefaultIndex(_indexName);
@@ -66,28 +73,50 @@ public class ElasticSearchService
             if (!existsResponse.Exists)
             {
                 // Описываем схему индекса: типы полей, ключевые слова, текстовые поля и т.д.
+                var synonymRules = GetSynonymRules();
+                var hasSynonymRules = synonymRules.Count > 0;
+
+                var analyzerFilters = hasSynonymRules
+                    ? new[] { "lowercase", "ru_synonyms", "stop" }
+                    : new[] { "lowercase", "stop" };
+
+                var analysis = new IndexSettingsAnalysis
+                {
+                    Normalizers = new Normalizers
+                    {
+                        ["ru_keyword_lower"] = new CustomNormalizer
+                        {
+                            Filter = new[] { "lowercase" }
+                        }
+                    },
+                    Analyzers = new Analyzers
+                    {
+                        ["ru_text"] = new CustomAnalyzer
+                        {
+                            Tokenizer = "standard",
+                            Filter = analyzerFilters
+                        }
+                    }
+                };
+
+                if (hasSynonymRules)
+                {
+                    analysis.TokenFilters = new TokenFilters
+                    {
+                        ["ru_synonyms"] = new SynonymGraphTokenFilter
+                        {
+                            Synonyms = synonymRules,
+                            Expand = true,
+                            Lenient = true
+                        }
+                    };
+                }
+
                 var createRequest = new CreateIndexRequest(_indexName)
                 {
                     Settings = new IndexSettings
                     {
-                        Analysis = new IndexSettingsAnalysis
-                        {
-                            Normalizers = new Normalizers
-                            {
-                                ["ru_keyword_lower"] = new CustomNormalizer
-                                {
-                                    Filter = new[] { "lowercase" }
-                                }
-                            },
-                            Analyzers = new Analyzers
-                            {
-                                ["ru_text"] = new CustomAnalyzer
-                                {
-                                    Tokenizer = "standard",
-                                    Filter = new[] { "lowercase", "stop" }
-                                }
-                            }
-                        }
+                        Analysis = analysis
                     },
                     Mappings = new TypeMapping
                     {
@@ -532,6 +561,22 @@ public class ElasticSearchService
                 Console.WriteLine($"Внутренняя ошибка: {ex.InnerException.Message}");
             }
             return false;
+        }
+    }
+
+    private List<string> GetSynonymRules()
+    {
+        if (_synonymProvider == null)
+            return new List<string>();
+
+        try
+        {
+            return _synonymProvider.BuildElasticSynonymRules();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка подготовки правил синонимов: {ex.Message}");
+            return new List<string>();
         }
     }
 }

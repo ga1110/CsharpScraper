@@ -1,0 +1,14 @@
+{
+  "Timestamp": "2025-11-22T00:00:19.1456697Z",
+  "IndicesCount": 1,
+  "Indices": [
+    {
+      "Name": "articles",
+      "DocumentCount": 5000,
+      "ActualDocumentCount": 5000,
+      "MappingFile": "articles_mapping.json",
+      "SettingsFile": "articles_settings.json",
+      "DataFile": "articles_data.json"
+    }
+  ]
+}

@@ -36,7 +36,7 @@ public class IndexingService
             return false;
         }
 
-        Console.WriteLine($"Загрузка статей из {jsonFilePath}...");
+        Console.WriteLine($"Загрузка статей из {jsonFilePath}");
         var json = await File.ReadAllTextAsync(jsonFilePath);
         
         // Проверяем, что файл не пустой

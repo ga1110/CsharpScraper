@@ -23,8 +23,44 @@ services:
       retries: 5
       start_period: 40s
 
+  ollama:
+    image: ollama/ollama:0.3.12
+    container_name: ollama-scraper
+    restart: unless-stopped
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - scraper-network
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        ollama serve &
+        pid=$!
+        until curl -sf http://localhost:11434/api/version >/dev/null 2>&1; do
+          sleep 2
+        done
+        ollama pull qwen2.5:3b || true
+        wait $pid
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
 volumes:
   elasticsearch_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./elasticsearch_data
+  ollama_data:
     driver: local
 
 networks:

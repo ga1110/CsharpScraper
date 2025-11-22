@@ -73,7 +73,7 @@ public class HttpFetcher
                 if (i == maxRetries - 1)
                     throw;
 
-                // Линейно увеличиваем задержку: 1 сек, 2 сек, 3 сек ...
+                // Линейно увеличиваем задержку: 1 сек, 2 сек, 3 сек
                 await Task.Delay(1000 * (i + 1)); // Увеличиваем задержку с каждой попыткой
             }
             catch (Exception ex)
