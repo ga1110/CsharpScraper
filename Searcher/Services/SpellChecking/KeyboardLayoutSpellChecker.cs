@@ -1,6 +1,6 @@
 using Searcher.Models;
 
-namespace Searcher.Services;
+namespace Searcher.Services.SpellChecking;
 
 /// <summary>
 /// Исправление опечаток, связанных с неправильной раскладкой клавиатуры

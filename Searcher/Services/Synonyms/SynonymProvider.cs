@@ -1,7 +1,8 @@
 using System.Text.Json;
 using Searcher.Models;
+using Searcher.Services.TextProcessing;
 
-namespace Searcher.Services;
+namespace Searcher.Services.Synonyms;
 
 /// <summary>
 /// Управляет словарем синонимов для расширения поисковых запросов.

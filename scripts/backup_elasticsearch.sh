@@ -92,3 +92,4 @@ ls -la "$BACKUP_PATH"
 echo ""
 echo "Для восстановления используйте:"
 echo "./scripts/restore_elasticsearch.sh $BACKUP_PATH"
+

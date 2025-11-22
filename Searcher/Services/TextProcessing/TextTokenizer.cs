@@ -1,7 +1,8 @@
 using System.Text.RegularExpressions;
 using Scraper.Models;
+using Searcher.Services.StopWords;
 
-namespace Searcher.Services;
+namespace Searcher.Services.TextProcessing;
 
 /// <summary>
 /// Токенизация и предобработка текста для анализа синонимов.

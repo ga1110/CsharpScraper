@@ -128,3 +128,4 @@ echo "Обновление индексов..."
 curl -s -u "$USERNAME:$PASSWORD" -X POST "$ELASTICSEARCH_URL/_refresh" > /dev/null
 
 echo "Восстановление завершено успешно!"
+

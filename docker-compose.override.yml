@@ -36,3 +36,4 @@ services:
 volumes:
   elasticsearch_backups:
     driver: local
+

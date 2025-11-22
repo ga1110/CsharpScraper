@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Encodings.Web;
 using Searcher.Models;
 
-namespace Searcher.Services;
+namespace Searcher.Services.Evaluation;
 
 /// <summary>
 /// Сервис для сбора, хранения и управления данными оценки качества поиска

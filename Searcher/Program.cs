@@ -2,21 +2,26 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using Searcher.Models;
-using Searcher.Services;
+using Searcher.Services.Evaluation;
+using Searcher.Services.Search;
+using Searcher.Services.Search.Indexing;
+using Searcher.Services.SpellChecking;
+using Searcher.Services.StopWords;
+using Searcher.Services.Synonyms;
+using Searcher.Services.Reranking;
+using Searcher.Services.TextProcessing;
 using Scraper.Models;
 using Scraper.Services;
 
 namespace Searcher;
 
-/// <summary>
-/// Главный класс приложения для поиска статей в ElasticSearch с поддержкой индексации и интерактивного поиска
-/// </summary>
 class Program
 {
     private static readonly char[] TagSeparators = new[] { '=', ':' };
     private static readonly StopWordsProvider StopWords = StopWordsProvider.CreateDefault();
     private static readonly SynonymProvider Synonyms = new SynonymProvider();
     private static CompositeSpellChecker? CompositeSpellChecker;
+    private static RerankerService? Reranker;
 
     /// <summary>
     /// Точка входа в приложение. Поддерживает два режима: индексацию статей (index) и интерактивный поиск
@@ -74,6 +79,9 @@ class Program
         {
             Console.WriteLine("Ollama недоступна, используем только традиционные методы");
         }
+
+        Reranker = new RerankerService();
+
         var backupService = new ElasticsearchBackupService(elasticSearchService.Client);
 
         // Перед работой проверяем доступность кластера и сообщаем пользователю диагностическую информацию
@@ -106,6 +114,20 @@ class Program
         if (args.Length > 0 && args[0] == "index" && args.Length > 1)
         {
             await indexingService.IndexArticlesFromJsonAsync(args[1]);
+            return;
+        }
+
+        if (args.Length > 0 && args[0].Equals("build-reranker", StringComparison.OrdinalIgnoreCase))
+        {
+            var command = string.Join(' ', args);
+            await HandleBuildRerankerCommand(command, elasticSearchService);
+            return;
+        }
+
+        if (args.Length > 0 && args[0].Equals("train-reranker", StringComparison.OrdinalIgnoreCase))
+        {
+            var command = string.Join(' ', args);
+            await HandleTrainRerankerCommand(command);
             return;
         }
 
@@ -155,6 +177,12 @@ class Program
             else if (input.ToLower().StartsWith("export-evaluation "))
                 // Команда export-evaluation экспортирует данные в CSV
                 await HandleExportEvaluationCommand(input);
+            else if (input.ToLower().StartsWith("build-reranker"))
+                // Сбор датасета для reranker-модели
+                await HandleBuildRerankerCommand(input, elasticSearchService);
+            else if (input.ToLower().StartsWith("train-reranker"))
+                // Обучение reranker-модели и сохранение на диск
+                await HandleTrainRerankerCommand(input);
             else if (input.ToLower().Trim() == "clear-evaluation")
                 // Команда clear-evaluation очищает все данные оценки
                 await HandleClearEvaluationCommand();
@@ -162,7 +190,7 @@ class Program
                 // Команда clear очищает консоль и показывает меню
                 HandleClearCommand();
             else
-                Console.WriteLine("Неизвестная команда. Используйте 'scrape', 'index', 'mine-synonyms', 'search', 'backup', 'restore', 'stats', 'evaluate', 'show-metrics', 'save-report', 'export-evaluation', 'clear-evaluation', 'clear' или 'exit'");
+                Console.WriteLine("Неизвестная команда. Используйте 'scrape', 'index', 'mine-synonyms', 'search', 'backup', 'restore', 'stats', 'evaluate', 'show-metrics', 'save-report', 'export-evaluation', 'build-reranker', 'train-reranker', 'clear-evaluation', 'clear' или 'exit'");
         }
     }
 
@@ -329,6 +357,13 @@ class Program
             Console.WriteLine($"Показано: {result.Documents.Count}");
             Console.WriteLine(new string('-', 80));
 
+            if (Reranker?.IsReady == true && result.Documents.Count > 1)
+            {
+                result.Documents = Reranker.Rerank(query, result.Documents);
+                Console.WriteLine("[Reranker] Порядок результатов обновлён ML-моделью.");
+                Console.WriteLine(new string('-', 80));
+            }
+
             for (int i = 0; i < result.Documents.Count; i++)
             {
                 var doc = result.Documents[i];
@@ -407,6 +442,64 @@ class Program
         }
 
         return tokens;
+    }
+
+    static Dictionary<string, string> ParseOptionDictionary(List<string> tokens)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            var token = tokens[i];
+            if (!token.StartsWith("--", StringComparison.Ordinal))
+                continue;
+
+            var trimmed = token.TrimStart('-');
+            string value = "true";
+
+            var separatorIndex = trimmed.IndexOf('=');
+            if (separatorIndex >= 0)
+            {
+                value = trimmed.Substring(separatorIndex + 1);
+                trimmed = trimmed.Substring(0, separatorIndex);
+            }
+            else if (i + 1 < tokens.Count && !tokens[i + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                value = tokens[++i];
+            }
+
+            dict[trimmed] = value.Trim('"');
+        }
+
+        return dict;
+    }
+
+    static string? GetOption(Dictionary<string, string> options, string key)
+    {
+        return options.TryGetValue(key, out var value) ? value : null;
+    }
+
+    static int GetIntOption(Dictionary<string, string> options, string key, int defaultValue)
+    {
+        if (options.TryGetValue(key, out var value) && int.TryParse(value, out var parsed))
+            return parsed;
+        return defaultValue;
+    }
+
+    static double GetDoubleOption(Dictionary<string, string> options, string key, double defaultValue)
+    {
+        if (options.TryGetValue(key, out var value) &&
+            double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+        {
+            return Math.Clamp(parsed, 0.05, 0.5);
+        }
+
+        return defaultValue;
+    }
+
+    static string GetProjectRoot()
+    {
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
     }
 
     static bool TryParseSearchTag(string rawToken, out SearchTagType tagType, out string? inlineValue, out bool expectsNextValue)
@@ -638,7 +731,6 @@ class Program
             // Индексируем статьи пакетами, чтобы не перегружать кластер
             const int batchSize = 100;
             int totalIndexed = 0;
-            int totalDuplicatesRemoved = 0;
             
             for (int i = 0; i < articles.Count; i += batchSize)
             {
@@ -651,11 +743,7 @@ class Program
 
             Console.WriteLine();
             Console.WriteLine($"Индексация завершена! Проиндексировано статей: {totalIndexed}");
-            
-            if (totalDuplicatesRemoved > 0)
-            {
-                Console.WriteLine($"   (Удалено дубликатов ID: {totalDuplicatesRemoved})");
-            }
+
             
             // Даем ElasticSearch время обновить индекс перед проверкой
             await Task.Delay(1000);
@@ -664,14 +752,6 @@ class Program
             var totalDocs = await elasticSearchService.GetTotalDocumentsAsync();
             Console.WriteLine($"Всего документов в индексе: {totalDocs}");
             
-            if (totalDocs != totalIndexed)
-            {
-                Console.WriteLine();
-                Console.WriteLine($"⚠️  Внимание: Расхождение в количестве документов!");
-                Console.WriteLine($"   Ожидалось: {totalIndexed}");
-                Console.WriteLine($"   Фактически в индексе: {totalDocs}");
-                Console.WriteLine($"   Разница: {totalIndexed - totalDocs}");
-            }
         }
         catch (Exception ex)
         {
@@ -1096,6 +1176,13 @@ class Program
             Console.WriteLine($"Показано для оценки: {result.Documents.Count}");
             Console.WriteLine(new string('=', 80));
 
+            if (Reranker?.IsReady == true && result.Documents.Count > 1)
+            {
+                result.Documents = Reranker.Rerank(query, result.Documents);
+                Console.WriteLine("[Reranker] Для оценки используется порядок после ML-переупорядочивания.");
+                Console.WriteLine(new string('=', 80));
+            }
+
             var evaluation = new QueryEvaluation
             {
                 QueryId = Guid.NewGuid().ToString(),
@@ -1330,6 +1417,92 @@ class Program
     }
 
     /// <summary>
+    /// Сбор 5k запросов и автоматическая разметка релевантности через Qwen
+    /// </summary>
+    static async Task HandleBuildRerankerCommand(string command, ElasticSearchService elasticSearchService)
+    {
+        var arguments = command.Length > "build-reranker".Length
+            ? command.Substring("build-reranker".Length).Trim()
+            : string.Empty;
+        var options = ParseOptionDictionary(SplitArguments(arguments));
+
+        int queryCount = GetIntOption(options, "queries", 5000);
+        int docsPerQuery = GetIntOption(options, "docs", 20);
+        string? datasetPath = GetOption(options, "dataset");
+        string? articlesPath = GetOption(options, "articles");
+        string? ollamaUrl = GetOption(options, "ollama");
+        string? modelName = GetOption(options, "model");
+
+        var generator = new QueryGenerator(articlesPath);
+        var labeler = await QwenRelevanceLabeler.CreateAsync(ollamaUrl, modelName);
+        if (labeler == null)
+        {
+            Console.WriteLine("Qwen недоступен. Проверьте Ollama и параметры подключения.");
+            return;
+        }
+
+        using (labeler)
+        {
+            var builder = new RerankerDatasetBuilder(elasticSearchService, generator, labeler, datasetPath);
+            try
+            {
+                var report = await builder.BuildAsync(queryCount, docsPerQuery);
+                Console.WriteLine($"[Dataset] Добавлено запросов: {report.GeneratedQueries}, пар: {report.GeneratedPairs}");
+                Console.WriteLine($"[Dataset] Всего запросов: {report.TotalQueries}, пар: {report.TotalPairs}");
+                Console.WriteLine($"[Dataset] Файл: {builder.DatasetPath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка сбора датасета: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Обучение ML reranker модели и подключение её к поиску
+    /// </summary>
+    static async Task HandleTrainRerankerCommand(string command)
+    {
+        var arguments = command.Length > "train-reranker".Length
+            ? command.Substring("train-reranker".Length).Trim()
+            : string.Empty;
+        var options = ParseOptionDictionary(SplitArguments(arguments));
+
+        var datasetPath = GetOption(options, "dataset") 
+            ?? Path.Combine(GetProjectRoot(), "data", "reranker", "dataset.jsonl");
+        var modelPath = GetOption(options, "output");
+        var testFraction = GetDoubleOption(options, "test", 0.2);
+
+        try
+        {
+            var trainer = new RerankerTrainer(datasetPath, modelPath);
+            var report = await trainer.TrainAsync(testFraction);
+
+            Console.WriteLine("=== Итоги обучения reranker ===");
+            Console.WriteLine($"Документо-записей: {report.TotalPairs}");
+            Console.WriteLine($"Уникальных запросов: {report.TotalQueries}");
+            Console.WriteLine($"NDCG@3: {report.MeanNdcgAt3:F3}");
+            Console.WriteLine($"NDCG@10: {report.MeanNdcgAt10:F3}");
+            Console.WriteLine($"Модель сохранена: {report.ModelPath}");
+
+            Reranker?.Dispose();
+            Reranker = new RerankerService(report.ModelPath);
+            if (Reranker.TryLoad())
+            {
+                Console.WriteLine("Реранкер перезагружен и готов к работе.");
+            }
+            else
+            {
+                Console.WriteLine("Не удалось загрузить новую модель для поиска.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка обучения reranker: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Очищает все данные оценки
     /// </summary>
     static async Task HandleClearEvaluationCommand()
@@ -1385,6 +1558,8 @@ class Program
         Console.WriteLine("  show-metrics - показать метрики качества поиска");
         Console.WriteLine("  save-report <файл.txt> - сохранить отчет в файл");
         Console.WriteLine("  export-evaluation <файл.csv> - экспорт данных в CSV");
+        Console.WriteLine("  build-reranker [--queries --docs] - собрать датасет через Qwen");
+        Console.WriteLine("  train-reranker [--dataset --output] - обучить reranker и подключить его");
         Console.WriteLine();
         Console.WriteLine("УПРАВЛЕНИЕ ДАННЫМИ:");
         Console.WriteLine("  backup - создать бэкап индекса");
@@ -1396,6 +1571,11 @@ class Program
         Console.WriteLine("  stats - показать статистику spell checker");
         Console.WriteLine("  clear - очистить консоль и показать это меню");
         Console.WriteLine("  exit - выход из программы");
+        Console.WriteLine();
+        Console.WriteLine("ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ:");
+        Console.WriteLine("  > search политика");
+        Console.WriteLine("  > evaluate спорт");
+        Console.WriteLine("  > show-metrics");
         Console.WriteLine();
     }
 

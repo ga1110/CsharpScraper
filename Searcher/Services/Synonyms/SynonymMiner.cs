@@ -1,7 +1,8 @@
 using Scraper.Models;
 using Searcher.Models;
+using Searcher.Services.StopWords;
 
-namespace Searcher.Services;
+namespace Searcher.Services.Synonyms;
 
 /// <summary>
 /// Основной класс для автоматического майнинга синонимов из статей.

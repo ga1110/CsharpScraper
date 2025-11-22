@@ -102,3 +102,4 @@ try {
     Write-Host "Ошибка при создании бэкапа: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
+

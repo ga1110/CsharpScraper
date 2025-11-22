@@ -7,13 +7,15 @@ using Elastic.Clients.Elasticsearch.QueryDsl;
 using Elastic.Transport;
 using Scraper.Models;
 using Searcher.Models;
+using Searcher.Services.Synonyms;
+using Searcher.Services.TextProcessing;
 using System;
 using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
-namespace Searcher.Services;
+namespace Searcher.Services.Search;
 
 /// <summary>
 /// Сервис для работы с ElasticSearch: создание индекса, индексация статей и поиск с поддержкой фильтров
@@ -397,13 +399,32 @@ public class ElasticSearchService
             throw new Exception($"Ошибка поиска: {response.DebugInformation}");
         }
 
+        var documents = new List<ArticleDocument>();
+        var scores = new Dictionary<string, double>();
         var highlights = new Dictionary<string, List<string>>();
-        
-        // Обрабатываем подсветку, если она есть в ответе
+
         if (response.Hits != null)
         {
+            var position = from + 1;
             foreach (var hit in response.Hits)
             {
+                if (hit.Source != null)
+                {
+                    var doc = hit.Source;
+                    if (!string.IsNullOrEmpty(hit.Id))
+                    {
+                        doc.Id = hit.Id;
+                    }
+                    doc.ElasticScore = hit.Score ?? 0d;
+                    doc.SearchRank = position++;
+                    documents.Add(doc);
+
+                    if (!string.IsNullOrEmpty(doc.Id))
+                    {
+                        scores[doc.Id] = doc.ElasticScore;
+                    }
+                }
+
                 if (hit.Highlight != null && hit.Id != null && hit.Highlight.Count > 0)
                 {
                     var highlightList = new List<string>();
@@ -416,18 +437,23 @@ public class ElasticSearchService
                     }
                     if (highlightList.Count > 0)
                     {
-                        // Сохраняем подсветки по ID документа, чтобы позже быстро найти их при выводе результатов
                         highlights[hit.Id] = highlightList;
                     }
                 }
             }
         }
 
+        if (documents.Count == 0 && response.Documents != null)
+        {
+            documents = response.Documents.ToList();
+        }
+
         return new SearchResult<ArticleDocument>
         {
-            Documents = response.Documents.ToList(),
+            Documents = documents,
             Total = response.Total,
-            Highlights = highlights
+            Highlights = highlights,
+            Scores = scores
         };
     }
 
@@ -601,4 +627,9 @@ public class SearchResult<T>
     /// Словарь подсветок совпадений, где ключ - ID документа, значение - список выделенных фрагментов
     /// </summary>
     public Dictionary<string, List<string>> Highlights { get; set; } = new();
+
+    /// <summary>
+    /// Карта документ -> исходный score ElasticSearch
+    /// </summary>
+    public Dictionary<string, double> Scores { get; set; } = new();
 }

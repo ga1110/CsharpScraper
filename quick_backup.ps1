@@ -88,3 +88,4 @@ try {
     docker-compose up -d 2>$null
     exit 1
 }
+

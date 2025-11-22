@@ -1,6 +1,6 @@
 using Searcher.Models;
 
-namespace Searcher.Services;
+namespace Searcher.Services.SpellChecking;
 
 /// <summary>
 /// Исправление опечаток на основе фонетического сходства (русский Soundex)

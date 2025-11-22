@@ -1,7 +1,8 @@
 using System.Text.Json;
 using Searcher.Models;
+using Searcher.Services.Search;
 
-namespace Searcher.Services;
+namespace Searcher.Services.SpellChecking;
 
 /// <summary>
 /// Проверщик орфографии, обучающийся на основе аналитики поисковых запросов

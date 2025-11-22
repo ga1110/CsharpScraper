@@ -1,8 +1,9 @@
 using System.Diagnostics;
 
 using Searcher.Models;
+using Searcher.Services.Search;
 
-namespace Searcher.Services;
+namespace Searcher.Services.SpellChecking;
 
 /// <summary>
 /// Композитный проверщик орфографии, объединяющий несколько методов

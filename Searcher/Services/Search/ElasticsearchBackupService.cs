@@ -5,7 +5,7 @@ using System.Text.Json;
 using Searcher.Models;
 using Scraper.Models;
 
-namespace Searcher.Services;
+namespace Searcher.Services.Search;
 
 /// <summary>
 /// Сервис для создания и восстановления бэкапов Elasticsearch индексов

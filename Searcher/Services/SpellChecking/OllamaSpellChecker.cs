@@ -7,10 +7,10 @@ using System.Text.Json.Serialization;
 using System.Linq;
 using Searcher.Models;
 
-namespace Searcher.Services;
+namespace Searcher.Services.SpellChecking;
 
 /// <summary>
-/// Клиент для обращения к локальному Ollama серверу и исправления опечаток с помощью модели Qwen2.5.
+/// Клиент для обращения к локальному Ollama серверу и исправления опечаток с помощью модели Qwen2.5 (0.5B параметров).
 /// </summary>
 public sealed class OllamaSpellChecker : ISpellChecker, IDisposable
 {
@@ -50,7 +50,7 @@ public sealed class OllamaSpellChecker : ISpellChecker, IDisposable
         CancellationToken cancellationToken = default)
     {
         baseUrl ??= Environment.GetEnvironmentVariable("OLLAMA_BASE_URL") ?? "http://localhost:11434";
-        modelName ??= Environment.GetEnvironmentVariable("OLLAMA_MODEL") ?? "qwen2.5:3b";
+        modelName ??= Environment.GetEnvironmentVariable("OLLAMA_MODEL") ?? "qwen2.5:0.5b";
 
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
         {

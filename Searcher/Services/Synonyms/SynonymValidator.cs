@@ -1,7 +1,9 @@
 using System.Text.RegularExpressions;
 using Scraper.Models;
+using Searcher.Services.StopWords;
+using Searcher.Services.TextProcessing;
 
-namespace Searcher.Services;
+namespace Searcher.Services.Synonyms;
 
 /// <summary>
 /// Валидация и фильтрация найденных синонимов.

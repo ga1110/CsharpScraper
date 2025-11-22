@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Searcher.Models;
 
 /// <summary>
@@ -49,4 +51,22 @@ public class ArticleDocument
     /// URL изображения статьи
     /// </summary>
     public string ImageUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Исходный score от ElasticSearch (_score)
+    /// </summary>
+    [JsonIgnore]
+    public double ElasticScore { get; set; }
+
+    /// <summary>
+    /// Позиция документа до переупорядочивания
+    /// </summary>
+    [JsonIgnore]
+    public int SearchRank { get; set; }
+
+    /// <summary>
+    /// Предсказанный скор reranker-моделью
+    /// </summary>
+    [JsonIgnore]
+    public double RerankerScore { get; set; }
 }

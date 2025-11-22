@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Searcher.Services.TextProcessing;
 
-namespace Searcher.Services;
+namespace Searcher.Services.StopWords;
 
 /// <summary>
 /// Управляет встроенным списком стоп-слов для фильтрации поисковых запросов.

@@ -1,7 +1,7 @@
 using System.Text;
 using Searcher.Models;
 
-namespace Searcher.Services;
+namespace Searcher.Services.Evaluation;
 
 /// <summary>
 /// Генератор отчетов по оценке качества поиска

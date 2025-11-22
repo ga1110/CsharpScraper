@@ -1,6 +1,6 @@
 using Searcher.Models;
 
-namespace Searcher.Services;
+namespace Searcher.Services.Evaluation;
 
 /// <summary>
 /// Калькулятор метрик качества информационного поиска
@@ -228,3 +228,4 @@ public class MetricsCalculator
         return positionStats.OrderBy(kvp => kvp.Key).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
     }
 }
+

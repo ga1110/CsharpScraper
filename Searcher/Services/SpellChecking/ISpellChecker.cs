@@ -1,6 +1,6 @@
 using Searcher.Models;
 
-namespace Searcher.Services;
+namespace Searcher.Services.SpellChecking;
 
 /// <summary>
 /// Интерфейс для различных методов исправления опечаток

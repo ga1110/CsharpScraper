@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Searcher.Models;
 
-namespace Searcher.Services;
+namespace Searcher.Services.SpellChecking;
 
 /// <summary>
 /// Исправление опечаток на основе расстояния Левенштейна и словаря

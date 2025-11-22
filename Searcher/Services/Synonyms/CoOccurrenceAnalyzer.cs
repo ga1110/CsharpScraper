@@ -1,6 +1,8 @@
 using Scraper.Models;
+using Searcher.Services.StopWords;
+using Searcher.Services.TextProcessing;
 
-namespace Searcher.Services;
+namespace Searcher.Services.Synonyms;
 
 /// <summary>
 /// Параметры для майнинга синонимов.

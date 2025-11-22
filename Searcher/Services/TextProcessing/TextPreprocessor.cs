@@ -1,4 +1,4 @@
-namespace Searcher.Services;
+namespace Searcher.Services.TextProcessing;
 
 /// <summary>
 /// Предобработка текстов перед индексацией и поиском.

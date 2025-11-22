@@ -1,7 +1,8 @@
 using Scraper.Models;
 using Scraper.Services;
+using Searcher.Services.Search;
 
-namespace Searcher.Services;
+namespace Searcher.Services.Search.Indexing;
 
 /// <summary>
 /// Сервис для индексации статей из JSON файла в ElasticSearch с пакетной обработкой
