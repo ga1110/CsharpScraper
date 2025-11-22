@@ -1,0 +1,113 @@
+[
+  {
+    "queryId": "bc0785bb-e305-46f4-9da9-93a5e38df644",
+    "queryText": "политика",
+    "timestamp": "2025-11-22T01:33:12.3883968Z",
+    "results": [
+      {
+        "position": 1,
+        "documentId": "cDIPE-8-1v7YviUAGZwi-MBsOTSABH9c2heB0yBqUmA",
+        "title": "правительство развернёт памятники на восток в рамках новой политики",
+        "url": "https://panorama.pub/news/razvernet-pamatniki",
+        "category": "политика",
+        "author": "arsen",
+        "relevanceScore": 2,
+        "comment": null
+      },
+      {
+        "position": 2,
+        "documentId": "gOfqyqZOliIcpcramvKUNJ8SBvRtkPzHLqKC4r0cZ3Q",
+        "title": "европейские политики договорились не носить деловые костюмы, чтобы поддержать украину",
+        "url": "https://panorama.pub/news/evropejskie-politiki-dogovorilis-ne-nosit",
+        "category": "политика",
+        "author": "пан порембский",
+        "relevanceScore": 2,
+        "comment": null
+      },
+      {
+        "position": 3,
+        "documentId": "toFk9AIW4EB18lYiMy4Yi16tqBnHctV4yQ0rrs7JTeM",
+        "title": "«самец политика» и «немец-перец-колбаса»: дмитрий медведев поздравил мировых лидеров с новым годом",
+        "url": "https://panorama.pub/news/samec-politika-i-nemec-perec",
+        "category": "политика",
+        "author": "антон мицкелюнас",
+        "relevanceScore": 1,
+        "comment": null
+      },
+      {
+        "position": 4,
+        "documentId": "PsL1YJvgV5olWNQ-juE-dfpXmi8cC-jMqnKLH9OVrBE",
+        "title": "чиновников и банкиров, покончивших с собой, оштрафуют за нарушение демографической политики",
+        "url": "https://panorama.pub/news/cinovnikov-i-bankirov-pokoncivsih-s",
+        "category": "политика",
+        "author": "аполлинарий ягужинский",
+        "relevanceScore": 1,
+        "comment": null
+      },
+      {
+        "position": 5,
+        "documentId": "Jv6X67UUbVxKpPUMFQeIqdAfgJeXXUql88Jp_4tfPK8",
+        "title": "на красной площади депутатам будут устанавливать «звёзды» за достижения в политике",
+        "url": "https://panorama.pub/news/na-krasnoj-plosadi-deputatam-budut",
+        "category": "политика",
+        "author": "аристофан",
+        "relevanceScore": 1,
+        "comment": null
+      },
+      {
+        "position": 6,
+        "documentId": "QaEbUyaginR9ycopfyk9JwAhsn_Z7tmywOK9TxqYhXE",
+        "title": "в тасс открылась выставка «иудин поцелуй: политики, которых предали ес и сша»",
+        "url": "https://panorama.pub/news/v-tass-otkrylas-vystavka-iudin",
+        "category": "политика",
+        "author": "антон мицкелюнас",
+        "relevanceScore": 1,
+        "comment": null
+      },
+      {
+        "position": 7,
+        "documentId": "M1YxLq0Tr22jqOAIF5aEZWCSd1o-hrHgKLCh7JHBDFk",
+        "title": "павел дуров пообещал заблокировать все каналы о политике и экономике, которые ведут школьники",
+        "url": "https://panorama.pub/news/pavel-durov-poobesal-zablokirovat-vse",
+        "category": "общество",
+        "author": "арон шлейфман",
+        "relevanceScore": 1,
+        "comment": null
+      },
+      {
+        "position": 8,
+        "documentId": "1aXWRYOSqbXhBnYdc8LQ02JqH7-AnSY1XiZWUqy3occ",
+        "title": "электросамокатчиков меньше не стало: в совфеде признали провал политики по борьбе с лгбт",
+        "url": "https://panorama.pub/news/elektrosamokatcikov-mense-ne-stalo-v",
+        "category": "общество",
+        "author": "эрвин кляйн",
+        "relevanceScore": 2,
+        "comment": null
+      },
+      {
+        "position": 9,
+        "documentId": "t0p6FQhCN-1orarAZp9gw6G7opB1YG6zJMwVgdumhF0",
+        "title": "«всё меньше школьников мечтают стать новыми русскими»: в совфеде похвалили образовательную политику государства",
+        "url": "https://panorama.pub/news/vse-mense-skolnikov-mectaut-stat",
+        "category": "общество",
+        "author": "борис гонтермахер",
+        "relevanceScore": 1,
+        "comment": null
+      },
+      {
+        "position": 10,
+        "documentId": "FWomOAJPt-7TXmU2DP0ZSR4pXtuTZ703XJEJ4bfu2s8",
+        "title": "«давай лучше о рыбалке»: лавров попросил журналистов отстать от него с вопросами о политике",
+        "url": "https://panorama.pub/news/davaj-lucse-o-rybalke-lavrov",
+        "category": "общество",
+        "author": "борис гонтермахер",
+        "relevanceScore": 0,
+        "comment": null
+      }
+    ],
+    "category": null,
+    "author": null,
+    "totalFound": 2025,
+    "comment": null
+  }
+]

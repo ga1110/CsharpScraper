@@ -45,8 +45,6 @@ public class SynonymProvider
             if (data != null)
             {
                 LoadFromData(data);
-                Console.WriteLine($"Загружено {_synonyms.Count} групп синонимов из {filePath}");
-                Console.WriteLine($"Дата последнего обновления: {data.LastUpdated:yyyy-MM-dd HH:mm:ss}");
             }
             else
             {

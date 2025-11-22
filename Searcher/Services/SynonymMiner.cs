@@ -192,7 +192,6 @@ public class SynonymMiner
             return new SynonymData();
         }
 
-        Console.WriteLine($"Загружено {articles.Count} статей");
         return await MineSynonymsAsync(articles, options);
     }
 }

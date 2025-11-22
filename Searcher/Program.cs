@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using Searcher.Models;
 using Searcher.Services;
 using Scraper.Models;
 using Scraper.Services;
@@ -108,18 +109,7 @@ class Program
             return;
         }
 
-        Console.WriteLine("Поисковик статей");
-        Console.WriteLine("Введите команды:");
-        Console.WriteLine("  scrape <количество> [--clear] - скрапить статьи и проиндексировать в ElasticSearch");
-        Console.WriteLine("  index - проиндексировать статьи из articles.json ");
-        Console.WriteLine("  mine-synonyms [--force] [--threshold=<значение>] - автоматический майнинг синонимов");
-        Console.WriteLine("  search <запрос> [category=<категория>] [author=<автор>] [size=10] [synmin=0.5] - единый поиск с тегами");
-        Console.WriteLine("     Теги: category=, author=, size=, synmin= или --category, --author, --size, --synmin");
-        Console.WriteLine("  backup - создать бэкап индекса в папке backup (заменяет предыдущий)");
-        Console.WriteLine("  restore [--force] - восстановить индекс из папки backup");
-        Console.WriteLine("  stats - показать статистику spell checker");
-        Console.WriteLine("  exit - выход");
-        Console.WriteLine();
+        ShowMainMenu();
 
         while (true)
         {
@@ -153,8 +143,26 @@ class Program
             else if (input.ToLower().Trim() == "stats")
                 // Команда stats показывает статистику spell checker
                 HandleStatsCommand();
+            else if (input.ToLower().StartsWith("evaluate "))
+                // Команда evaluate выполняет поиск и сразу оценивает результаты
+                await HandleEvaluateCommand(input, elasticSearchService);
+            else if (input.ToLower().Trim() == "show-metrics")
+                // Команда show-metrics показывает все рассчитанные метрики
+                await HandleShowMetricsCommand();
+            else if (input.ToLower().StartsWith("save-report "))
+                // Команда save-report сохраняет полный отчет в файл
+                await HandleSaveReportCommand(input);
+            else if (input.ToLower().StartsWith("export-evaluation "))
+                // Команда export-evaluation экспортирует данные в CSV
+                await HandleExportEvaluationCommand(input);
+            else if (input.ToLower().Trim() == "clear-evaluation")
+                // Команда clear-evaluation очищает все данные оценки
+                await HandleClearEvaluationCommand();
+            else if (input.ToLower().Trim() == "clear")
+                // Команда clear очищает консоль и показывает меню
+                HandleClearCommand();
             else
-                Console.WriteLine("Неизвестная команда. Используйте 'scrape', 'index', 'mine-synonyms', 'search', 'backup', 'restore', 'stats' или 'exit'");
+                Console.WriteLine("Неизвестная команда. Используйте 'scrape', 'index', 'mine-synonyms', 'search', 'backup', 'restore', 'stats', 'evaluate', 'show-metrics', 'save-report', 'export-evaluation', 'clear-evaluation', 'clear' или 'exit'");
         }
     }
 
@@ -264,6 +272,18 @@ class Program
                 var correction = await CompositeSpellChecker.TryCorrectAsync(query);
                 if (correction.HasCorrection)
                 {
+                    Console.WriteLine($"Исправлен запрос: '{query}' -> '{correction.CorrectedQuery}'");
+                    Console.WriteLine($"Уверенность: {correction.Confidence:F2}, Время: {correction.ProcessingTime.TotalMilliseconds:F0}мс");
+                    
+                    if (correction.Steps.Count > 0)
+                    {
+                        Console.WriteLine("Шаги исправления:");
+                        foreach (var step in correction.Steps)
+                        {
+                            Console.WriteLine($"  {step.Method}: '{step.Before}' -> '{step.After}' ({step.Confidence:F2})");
+                        }
+                    }
+                    
                     query = correction.CorrectedQuery;
                 }
             }
@@ -276,6 +296,11 @@ class Program
         // Расширяем запрос синонимами
         var expandedQuery = synonyms.ExpandQuery(query, synonymConfidence);
         
+        Console.WriteLine($"Оригинальный запрос: '{query}'");
+        if (expandedQuery != query)
+        {
+            Console.WriteLine($"Расширенный запрос (с синонимами): '{expandedQuery}'");
+        }
         Console.WriteLine($"Поиск: '{expandedQuery}' (результатов: {size})");
         if (!string.IsNullOrEmpty(category))
             Console.WriteLine($"Категория: {category}");
@@ -328,13 +353,13 @@ class Program
                     // Подсветки нагляднее показывают, почему документ попал в выдачу
                     Console.WriteLine($"   Выделенные фрагменты:");
                     foreach (var highlight in highlights.Take(3))
-                        Console.WriteLine($"     ...{highlight}...");
+                        Console.WriteLine($"     {highlight}");
                 }
                 else if (!string.IsNullOrEmpty(doc.Content))
                 {
                     // Если подсветок нет, выводим превью первых 200 символов текста
                     var preview = doc.Content.Length > 200 
-                        ? doc.Content.Substring(0, 200) + "..." 
+                        ? doc.Content.Substring(0, 200) + " [обрезано]" 
                         : doc.Content;
                     Console.WriteLine($"   Содержание: {preview}");
                 }
@@ -849,7 +874,7 @@ class Program
     /// <param name="backupService">Сервис для создания бэкапов</param>
     static async Task HandleBackupCommand(string command, ElasticsearchBackupService backupService)
     {
-        Console.WriteLine("Создание бэкапа...");
+        Console.WriteLine("Создание бэкапа");
         
         try
         {
@@ -876,8 +901,44 @@ class Program
         
         try
         {
-            Console.WriteLine("Восстановление из папки backup...");
-            await backupService.RestoreBackupAsync(force: force);
+            Console.WriteLine("Восстановление из папки backup");
+            
+            // Определяем правильный путь к папке backup
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var projectRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
+            var backupPath = Path.Combine(projectRoot, "backup");
+            
+            Console.WriteLine($"Ищем бэкап в: {backupPath}");
+            
+            if (!Directory.Exists(backupPath))
+            {
+                Console.WriteLine($"Папка backup не найдена в: {backupPath}");
+                Console.WriteLine($"Текущая директория: {Directory.GetCurrentDirectory()}");
+                Console.WriteLine($"BaseDirectory: {baseDir}");
+                Console.WriteLine($"ProjectRoot: {projectRoot}");
+                
+                // Попробуем найти папку backup в других местах
+                var alternativePaths = new[]
+                {
+                    Path.Combine(Directory.GetCurrentDirectory(), "backup"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "..", "backup"),
+                    "backup"
+                };
+                
+                foreach (var altPath in alternativePaths)
+                {
+                    var fullAltPath = Path.GetFullPath(altPath);
+                    Console.WriteLine($"Проверяем: {fullAltPath}");
+                    if (Directory.Exists(fullAltPath))
+                    {
+                        backupPath = fullAltPath;
+                        Console.WriteLine($"Найдена папка backup в: {backupPath}");
+                        break;
+                    }
+                }
+            }
+            
+            await backupService.RestoreBackupAsync(backupPath, force: force);
             Console.WriteLine("Восстановление завершено");
         }
         catch (Exception ex)
@@ -928,6 +989,448 @@ class Program
         }
 
         Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Обрабатывает команду оценки качества поиска
+    /// </summary>
+    /// <param name="command">Строка команды в формате "evaluate <запрос> [category=<категория>] [author=<автор>]"</param>
+    /// <param name="elasticSearchService">Сервис для выполнения поиска</param>
+    static async Task HandleEvaluateCommand(string command, ElasticSearchService elasticSearchService)
+    {
+        var arguments = command.Length > "evaluate".Length
+            ? command.Substring("evaluate".Length).Trim()
+            : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(arguments))
+        {
+            Console.WriteLine("Использование: evaluate <запрос> [category=<категория>] [author=<автор>]");
+            return;
+        }
+
+        // Парсим аргументы (переиспользуем логику из HandleSearchCommand)
+        var tokens = SplitArguments(arguments);
+        if (tokens.Count == 0)
+        {
+            Console.WriteLine("Запрос не может быть пустым!");
+            return;
+        }
+
+        var queryParts = new List<string>();
+        string? category = null;
+        string? author = null;
+
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            var token = tokens[i];
+
+            if (TryParseSearchTag(token, out var tagType, out var inlineValue, out var requiresNextValue))
+            {
+                string? tagValue = inlineValue;
+
+                if (requiresNextValue)
+                {
+                    if (i + 1 >= tokens.Count)
+                    {
+                        Console.WriteLine($"Тег '{GetTagLabel(tagType)}' требует значение.");
+                        return;
+                    }
+                    tagValue = tokens[++i];
+                }
+
+                if (string.IsNullOrWhiteSpace(tagValue))
+                    continue;
+
+                switch (tagType)
+                {
+                    case SearchTagType.Category:
+                        category = TextPreprocessor.NormalizeOrNull(tagValue);
+                        break;
+                    case SearchTagType.Author:
+                        author = TextPreprocessor.NormalizeOrNull(tagValue);
+                        break;
+                }
+                continue;
+            }
+
+            var normalizedToken = TextPreprocessor.Normalize(token);
+            if (StopWords.IsStopWord(normalizedToken))
+                continue;
+
+            if (!string.IsNullOrEmpty(normalizedToken))
+                queryParts.Add(normalizedToken);
+        }
+
+        var query = string.Join(' ', queryParts).Trim();
+        if (string.IsNullOrEmpty(query))
+        {
+            Console.WriteLine("Запрос не может быть пустым!");
+            return;
+        }
+
+        // Расширяем запрос синонимами
+        var expandedQuery = Synonyms.ExpandQuery(query);
+        
+        Console.WriteLine($"Выполняется поиск для оценки: '{expandedQuery}'");
+        if (!string.IsNullOrEmpty(category))
+            Console.WriteLine($"Категория: {category}");
+        if (!string.IsNullOrEmpty(author))
+            Console.WriteLine($"Автор: {author}");
+        Console.WriteLine();
+
+        try
+        {
+            // Проверяем, что индекс существует
+            var totalDocs = await elasticSearchService.GetTotalDocumentsAsync();
+            if (totalDocs == 0)
+            {
+                Console.WriteLine("Индекс пуст или не существует. Сначала выполните команду 'index' или 'scrape <количество>'.");
+                Console.WriteLine();
+                return;
+            }
+            
+            // Выполняем поиск (берем до 10 результатов для оценки)
+            var result = await elasticSearchService.SearchAsync(expandedQuery, 0, 10, category, author);
+            
+            Console.WriteLine($"Найдено документов: {result.Total}");
+            Console.WriteLine($"Показано для оценки: {result.Documents.Count}");
+            Console.WriteLine(new string('=', 80));
+
+            var evaluation = new QueryEvaluation
+            {
+                QueryId = Guid.NewGuid().ToString(),
+                QueryText = query,
+                Timestamp = DateTime.UtcNow,
+                Category = category,
+                Author = author,
+                TotalFound = result.Total
+            };
+
+            // Показываем результаты и собираем оценки
+            for (int i = 0; i < result.Documents.Count; i++)
+            {
+                var doc = result.Documents[i];
+                Console.WriteLine($"{i + 1}. {doc.Title}");
+                Console.WriteLine($"   URL: {doc.Url}");
+                if (!string.IsNullOrEmpty(doc.Category))
+                    Console.WriteLine($"   Категория: {doc.Category}");
+                if (!string.IsNullOrEmpty(doc.Author))
+                    Console.WriteLine($"   Автор: {doc.Author}");
+                if (doc.PublishDate.HasValue)
+                    Console.WriteLine($"   Дата: {doc.PublishDate.Value:yyyy-MM-dd HH:mm}");
+
+                // Показываем фрагмент содержимого
+                if (!string.IsNullOrEmpty(doc.Content))
+                {
+                    var preview = doc.Content.Length > 200 
+                        ? doc.Content.Substring(0, 200) + " [обрезано]" 
+                        : doc.Content;
+                    Console.WriteLine($"   Содержание: {preview}");
+                }
+
+                Console.WriteLine();
+                Console.WriteLine("Оцените релевантность этого результата:");
+                Console.WriteLine("  0 - Нерелевантно (не подходит к запросу)");
+                Console.WriteLine("  1 - Частично релевантно (подходит, но не очень)");
+                Console.WriteLine("  2 - Очень релевантно (отлично подходит)");
+                Console.Write("Ваша оценка (0-2): ");
+
+                int relevanceScore = 0;
+                var input = Console.ReadLine();
+                if (int.TryParse(input, out var score) && score >= 0 && score <= 2)
+                {
+                    relevanceScore = score;
+                }
+                else
+                {
+                    Console.WriteLine("Некорректная оценка, используется 0 (нерелевантно)");
+                }
+
+                // Опциональный комментарий
+                Console.Write("Комментарий (необязательно): ");
+                var comment = Console.ReadLine();
+
+                evaluation.Results.Add(new ResultRelevance
+                {
+                    Position = i + 1,
+                    DocumentId = doc.Id,
+                    Title = doc.Title,
+                    Url = doc.Url,
+                    Category = doc.Category,
+                    Author = doc.Author,
+                    RelevanceScore = relevanceScore,
+                    Comment = string.IsNullOrWhiteSpace(comment) ? null : comment
+                });
+
+                Console.WriteLine(new string('-', 80));
+            }
+
+            // Сохраняем оценку
+            var evaluationService = new EvaluationService();
+            
+            Console.WriteLine("Сохранение оценки");
+            try 
+            {
+                await evaluationService.SaveQueryEvaluationAsync(evaluation);
+                Console.WriteLine("Оценка успешно сохранена");
+            }
+            catch (Exception saveEx)
+            {
+                Console.WriteLine($"Ошибка при сохранении оценки: {saveEx.Message}");
+                Console.WriteLine($"Путь к файлу: {Path.GetFullPath("evaluation_data.json")}");
+            }
+
+            // Рассчитываем и показываем метрики
+            var calculator = new MetricsCalculator();
+            var metrics = calculator.CalculateMetrics(evaluation);
+
+            Console.WriteLine();
+            Console.WriteLine("Метрики для этого запроса:");
+            Console.WriteLine($"  Precision@1:  {metrics.PrecisionAt1:F3}");
+            Console.WriteLine($"  Precision@5:  {metrics.PrecisionAt5:F3}");
+            Console.WriteLine($"  Precision@10: {metrics.PrecisionAt10:F3}");
+            Console.WriteLine($"  Average Precision: {metrics.AveragePrecision:F3}");
+            Console.WriteLine($"  NDCG: {metrics.NDCG:F3}");
+            Console.WriteLine($"  Reciprocal Rank: {metrics.ReciprocalRank:F3}");
+            Console.WriteLine($"  Релевантных документов: {metrics.RelevantCount} из {metrics.TotalCount}");
+            
+            Console.WriteLine();
+            Console.WriteLine($"Оценка сохранена с ID: {evaluation.QueryId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при выполнении оценки: {ex.Message}");
+        }
+
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Показывает все рассчитанные метрики качества поиска
+    /// </summary>
+    static async Task HandleShowMetricsCommand()
+    {
+        var evaluationService = new EvaluationService();
+        var evaluations = await evaluationService.LoadAllEvaluationsAsync();
+
+        if (evaluations.Count == 0)
+        {
+            Console.WriteLine("Нет данных для оценки. Сначала выполните команду 'evaluate <запрос>'.");
+            Console.WriteLine();
+            return;
+        }
+
+        var reportGenerator = new EvaluationReportGenerator();
+        var fullReport = reportGenerator.GenerateFullReport(evaluations);
+        
+        Console.WriteLine(fullReport);
+        
+        // Предложение сохранить отчет
+        Console.Write("Сохранить отчет в файл? (y/N): ");
+        var saveResponse = Console.ReadLine();
+        
+        if (saveResponse?.ToLower() == "y" || saveResponse?.ToLower() == "yes")
+        {
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var reportPath = $"evaluation_report_{timestamp}.txt";
+            
+            try
+            {
+                await reportGenerator.SaveReportToFileAsync(fullReport, reportPath);
+                Console.WriteLine($"Отчет сохранен в файл: {reportPath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при сохранении отчета: {ex.Message}");
+            }
+        }
+        
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Сохраняет полный отчет в текстовый файл
+    /// </summary>
+    /// <param name="command">Команда с путем к файлу</param>
+    static async Task HandleSaveReportCommand(string command)
+    {
+        var parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2)
+        {
+            Console.WriteLine("Использование: save-report <файл.txt>");
+            return;
+        }
+
+        var reportPath = parts[1];
+        if (!reportPath.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+        {
+            reportPath += ".txt";
+        }
+
+        try
+        {
+            var evaluationService = new EvaluationService();
+            var evaluations = await evaluationService.LoadAllEvaluationsAsync();
+
+            if (evaluations.Count == 0)
+            {
+                Console.WriteLine("Нет данных для создания отчета. Сначала выполните оценку запросов.");
+                return;
+            }
+
+            var reportGenerator = new EvaluationReportGenerator();
+            var fullReport = reportGenerator.GenerateFullReport(evaluations);
+            
+            await reportGenerator.SaveReportToFileAsync(fullReport, reportPath);
+            Console.WriteLine($"Полный отчет сохранен в файл: {reportPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при сохранении отчета: {ex.Message}");
+        }
+
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Экспортирует данные оценки в CSV файл
+    /// </summary>
+    /// <param name="command">Команда с путем к файлу</param>
+    static async Task HandleExportEvaluationCommand(string command)
+    {
+        var parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2)
+        {
+            Console.WriteLine("Использование: export-evaluation <файл.csv>");
+            return;
+        }
+
+        var csvPath = parts[1];
+        if (!csvPath.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+        {
+            csvPath += ".csv";
+        }
+
+        try
+        {
+            var evaluationService = new EvaluationService();
+            var fullCsvPath = Path.GetFullPath(csvPath);
+            Console.WriteLine($"Экспорт в файл: {fullCsvPath}");
+            
+            await evaluationService.ExportToCsvAsync(fullCsvPath);
+            Console.WriteLine($"Данные оценки экспортированы в файл: {fullCsvPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при экспорте: {ex.Message}");
+            Console.WriteLine($"Стек вызовов: {ex.StackTrace}");
+        }
+
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Очищает все данные оценки
+    /// </summary>
+    static async Task HandleClearEvaluationCommand()
+    {
+        Console.Write("Вы уверены, что хотите удалить все данные оценки? (y/N): ");
+        var confirmation = Console.ReadLine();
+
+        if (confirmation?.ToLower() == "y" || confirmation?.ToLower() == "yes")
+        {
+            try
+            {
+                var evaluationService = new EvaluationService();
+                
+                // Создаем резервную копию перед удалением
+                var stats = await evaluationService.GetBasicStatsAsync();
+                if (stats.TotalQueries > 0)
+                {
+                    var backupPath = await evaluationService.CreateBackupAsync();
+                    Console.WriteLine($"Создана резервная копия: {backupPath}");
+                }
+
+                await evaluationService.ClearAllEvaluationsAsync();
+                Console.WriteLine("Все данные оценки удалены.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при очистке данных: {ex.Message}");
+            }
+        }
+        else
+        {
+            Console.WriteLine("Операция отменена.");
+        }
+
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Отображает главное меню с доступными командами
+    /// </summary>
+    static void ShowMainMenu()
+    {
+        Console.WriteLine("ПОИСКОВИК СТАТЕЙ");
+        Console.WriteLine(new string('=', 50));
+        Console.WriteLine();
+        Console.WriteLine("ОСНОВНЫЕ КОМАНДЫ:");
+        Console.WriteLine("  scrape <количество> [--clear] - скрапить статьи и проиндексировать");
+        Console.WriteLine("  index - проиндексировать статьи из articles.json");
+        Console.WriteLine("  search <запрос> [теги] - поиск по статьям");
+        Console.WriteLine();
+        Console.WriteLine("ОЦЕНКА КАЧЕСТВА:");
+        Console.WriteLine("  evaluate <запрос> - выполнить поиск и оценить результаты");
+        Console.WriteLine("  show-metrics - показать метрики качества поиска");
+        Console.WriteLine("  save-report <файл.txt> - сохранить отчет в файл");
+        Console.WriteLine("  export-evaluation <файл.csv> - экспорт данных в CSV");
+        Console.WriteLine();
+        Console.WriteLine("УПРАВЛЕНИЕ ДАННЫМИ:");
+        Console.WriteLine("  backup - создать бэкап индекса");
+        Console.WriteLine("  restore [--force] - восстановить индекс из бэкапа");
+        Console.WriteLine("  clear-evaluation - очистить данные оценки");
+        Console.WriteLine();
+        Console.WriteLine("ДОПОЛНИТЕЛЬНО:");
+        Console.WriteLine("  mine-synonyms [--force] - автоматический майнинг синонимов");
+        Console.WriteLine("  stats - показать статистику spell checker");
+        Console.WriteLine("  clear - очистить консоль и показать это меню");
+        Console.WriteLine("  exit - выход из программы");
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Обрабатывает команду очистки консоли
+    /// </summary>
+    static void HandleClearCommand()
+    {
+        ClearConsole();
+        ShowMainMenu();
+    }
+
+    /// <summary>
+    /// Очищает консоль различными способами в зависимости от среды выполнения
+    /// </summary>
+    static void ClearConsole()
+    {
+        try
+        {
+            // Метод 1: Стандартная очистка консоли
+            Console.Clear();
+        }
+        catch
+        {
+            try
+            {
+                // Метод 2: ANSI escape sequences (работает в большинстве современных терминалов)
+                Console.Write("\u001b[2J\u001b[H");
+            }
+            catch
+            {
+                // Метод 3: Если ничего не работает, выводим много пустых строк
+                Console.WriteLine(new string('\n', 50));
+            }
+        }
     }
 }
 
