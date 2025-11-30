@@ -169,7 +169,7 @@ public class EvaluationService
         using var writer = new StreamWriter(csvFilePath);
         
         // Заголовок CSV
-        await writer.WriteLineAsync("QueryId,QueryText,Position,DocumentId,Title,Url,Category,Author,RelevanceScore,Comment,Timestamp");
+        await writer.WriteLineAsync("QueryId,QueryText,Position,DocumentId,Title,Url,Category,Author,RelevanceScore,Comment,AiRelevanceScore,AiConfidence,AiReason,Timestamp");
         
         // Данные
         foreach (var evaluation in evaluations)
@@ -186,6 +186,9 @@ public class EvaluationService
                           $"\"{EscapeCsv(result.Author ?? "")}\"," +
                           $"{result.RelevanceScore}," +
                           $"\"{EscapeCsv(result.Comment ?? "")}\"," +
+                          $"{(result.AiRelevanceScore.HasValue ? result.AiRelevanceScore.Value.ToString() : "")}," +
+                          $"{(result.AiConfidence.HasValue ? result.AiConfidence.Value.ToString("F3") : "")}," +
+                          $"\"{EscapeCsv(result.AiReason ?? "")}\"," +
                           $"\"{evaluation.Timestamp:yyyy-MM-dd HH:mm:ss}\"";
                 
                 await writer.WriteLineAsync(line);

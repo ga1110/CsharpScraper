@@ -12,7 +12,10 @@
         "category": "политика",
         "author": "arsen",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 2,
@@ -22,7 +25,10 @@
         "category": "политика",
         "author": "пан порембский",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 3,
@@ -32,7 +38,10 @@
         "category": "политика",
         "author": "антон мицкелюнас",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 4,
@@ -42,7 +51,10 @@
         "category": "политика",
         "author": "аполлинарий ягужинский",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 5,
@@ -52,7 +64,10 @@
         "category": "политика",
         "author": "аристофан",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 6,
@@ -62,7 +77,10 @@
         "category": "политика",
         "author": "антон мицкелюнас",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 7,
@@ -72,7 +90,10 @@
         "category": "общество",
         "author": "арон шлейфман",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 8,
@@ -82,7 +103,10 @@
         "category": "общество",
         "author": "эрвин кляйн",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 9,
@@ -92,7 +116,10 @@
         "category": "общество",
         "author": "борис гонтермахер",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 10,
@@ -102,7 +129,10 @@
         "category": "общество",
         "author": "борис гонтермахер",
         "relevanceScore": 0,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       }
     ],
     "category": null,
@@ -123,7 +153,10 @@
         "category": "общество",
         "author": "виталий манн",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 2,
@@ -133,7 +166,10 @@
         "category": "политика",
         "author": "арон шлейфман",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 3,
@@ -143,7 +179,10 @@
         "category": "политика",
         "author": "arsen",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 4,
@@ -153,7 +192,10 @@
         "category": "политика",
         "author": "борис гонтермахер",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 5,
@@ -163,7 +205,10 @@
         "category": "политика",
         "author": "арон шлейфман",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 6,
@@ -173,7 +218,10 @@
         "category": "общество",
         "author": "пресс-служба профсоюзов россии",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 7,
@@ -183,7 +231,10 @@
         "category": "политика",
         "author": "борис гонтермахер",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 8,
@@ -193,7 +244,10 @@
         "category": "политика",
         "author": "эрвин кляйн",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 9,
@@ -203,7 +257,10 @@
         "category": "общество",
         "author": "эрвин кляйн",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 10,
@@ -213,7 +270,10 @@
         "category": "политика",
         "author": "виталий манн",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       }
     ],
     "category": null,
@@ -234,7 +294,10 @@
         "category": "общество",
         "author": "",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 2,
@@ -244,7 +307,10 @@
         "category": "общество",
         "author": "виталий манн",
         "relevanceScore": 0,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 3,
@@ -254,7 +320,10 @@
         "category": "общество",
         "author": "виталий манн",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 4,
@@ -264,7 +333,10 @@
         "category": "общество",
         "author": "",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 5,
@@ -274,7 +346,10 @@
         "category": "политика",
         "author": "эрвин кляйн",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 6,
@@ -284,7 +359,10 @@
         "category": "общество",
         "author": "бронислав рубенштейн",
         "relevanceScore": 0,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 7,
@@ -294,7 +372,10 @@
         "category": "общество",
         "author": "бронислав рубенштейн",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 8,
@@ -304,7 +385,10 @@
         "category": "политика",
         "author": "антон мицкелюнас",
         "relevanceScore": 0,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 9,
@@ -314,7 +398,10 @@
         "category": "политика",
         "author": "эрвин кляйн",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 10,
@@ -324,7 +411,10 @@
         "category": "общество",
         "author": "борис гонтермахер",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       }
     ],
     "category": null,
@@ -345,7 +435,10 @@
         "category": "политика",
         "author": "пан порембский",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 2,
@@ -355,7 +448,10 @@
         "category": "политика",
         "author": "пан порембский",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 3,
@@ -365,7 +461,10 @@
         "category": "политика",
         "author": "борис гонтермахер",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 4,
@@ -375,7 +474,10 @@
         "category": "политика",
         "author": "пан порембский",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 5,
@@ -385,7 +487,10 @@
         "category": "политика",
         "author": "пан порембский",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 6,
@@ -395,7 +500,10 @@
         "category": "политика",
         "author": "пан порембский",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 7,
@@ -405,7 +513,10 @@
         "category": "политика",
         "author": "вагиф джавадов",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 8,
@@ -415,7 +526,10 @@
         "category": "политика",
         "author": "стасик птичкин",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 9,
@@ -425,7 +539,10 @@
         "category": "политика",
         "author": "пан порембский",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 10,
@@ -435,7 +552,10 @@
         "category": "политика",
         "author": "аполлинарий ягужинский",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       }
     ],
     "category": null,
@@ -456,7 +576,10 @@
         "category": "общество",
         "author": "антон мицкелюнас",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 2,
@@ -466,7 +589,10 @@
         "category": "общество",
         "author": "альбина македонская",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 3,
@@ -476,7 +602,10 @@
         "category": "политика",
         "author": "борис гонтермахер",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 4,
@@ -486,7 +615,10 @@
         "category": "общество",
         "author": "",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 5,
@@ -496,7 +628,10 @@
         "category": "политика",
         "author": "виталий манн",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 6,
@@ -506,7 +641,10 @@
         "category": "экономика",
         "author": "arsen",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 7,
@@ -516,7 +654,10 @@
         "category": "общество",
         "author": "геннадий ройный",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 8,
@@ -526,7 +667,10 @@
         "category": "политика",
         "author": "эрвин кляйн",
         "relevanceScore": 0,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 9,
@@ -536,7 +680,10 @@
         "category": "общество",
         "author": "шарль латэн",
         "relevanceScore": 0,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 10,
@@ -546,7 +693,10 @@
         "category": "общество",
         "author": "борис гонтермахер",
         "relevanceScore": 0,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       }
     ],
     "category": null,
@@ -567,7 +717,10 @@
         "category": "политика",
         "author": "arsen",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 2,
@@ -577,7 +730,10 @@
         "category": "политика",
         "author": "борис гонтермахер",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 3,
@@ -587,7 +743,10 @@
         "category": "общество",
         "author": "роман чередниченко",
         "relevanceScore": 1,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 4,
@@ -597,7 +756,10 @@
         "category": "политика",
         "author": "пан порембский",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 5,
@@ -607,7 +769,10 @@
         "category": "политика",
         "author": "антон мицкелюнас",
         "relevanceScore": 0,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 6,
@@ -617,7 +782,10 @@
         "category": "политика",
         "author": "аполлинарий ягужинский",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 7,
@@ -627,7 +795,10 @@
         "category": "политика",
         "author": "аристофан",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 8,
@@ -637,7 +808,10 @@
         "category": "общество",
         "author": "виталий манн",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 9,
@@ -647,7 +821,10 @@
         "category": "политика",
         "author": "борис гонтермахер",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       },
       {
         "position": 10,
@@ -657,12 +834,775 @@
         "category": "общество",
         "author": "борис гонтермахер",
         "relevanceScore": 2,
-        "comment": null
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
       }
     ],
     "category": null,
     "author": null,
     "totalFound": 2708,
+    "comment": null
+  },
+  {
+    "queryId": "a43e3f2a-b09f-47c9-a399-710966d7e0a5",
+    "queryText": "политика",
+    "timestamp": "2025-11-30T06:28:34.540161Z",
+    "results": [
+      {
+        "position": 1,
+        "documentId": "cDIPE-8-1v7YviUAGZwi-MBsOTSABH9c2heB0yBqUmA",
+        "title": "правительство развернёт памятники на восток в рамках новой политики",
+        "url": "https://panorama.pub/news/razvernet-pamatniki",
+        "category": "политика",
+        "author": "arsen",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 2,
+        "documentId": "gOfqyqZOliIcpcramvKUNJ8SBvRtkPzHLqKC4r0cZ3Q",
+        "title": "европейские политики договорились не носить деловые костюмы, чтобы поддержать украину",
+        "url": "https://panorama.pub/news/evropejskie-politiki-dogovorilis-ne-nosit",
+        "category": "политика",
+        "author": "пан порембский",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 3,
+        "documentId": "toFk9AIW4EB18lYiMy4Yi16tqBnHctV4yQ0rrs7JTeM",
+        "title": "«самец политика» и «немец-перец-колбаса»: дмитрий медведев поздравил мировых лидеров с новым годом",
+        "url": "https://panorama.pub/news/samec-politika-i-nemec-perec",
+        "category": "политика",
+        "author": "антон мицкелюнас",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 4,
+        "documentId": "PsL1YJvgV5olWNQ-juE-dfpXmi8cC-jMqnKLH9OVrBE",
+        "title": "чиновников и банкиров, покончивших с собой, оштрафуют за нарушение демографической политики",
+        "url": "https://panorama.pub/news/cinovnikov-i-bankirov-pokoncivsih-s",
+        "category": "политика",
+        "author": "аполлинарий ягужинский",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 5,
+        "documentId": "Jv6X67UUbVxKpPUMFQeIqdAfgJeXXUql88Jp_4tfPK8",
+        "title": "на красной площади депутатам будут устанавливать «звёзды» за достижения в политике",
+        "url": "https://panorama.pub/news/na-krasnoj-plosadi-deputatam-budut",
+        "category": "политика",
+        "author": "аристофан",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      }
+    ],
+    "category": null,
+    "author": null,
+    "totalFound": 2025,
+    "comment": null
+  },
+  {
+    "queryId": "a820b2e9-91fb-4fe3-90e6-a86040851daf",
+    "queryText": "экономика",
+    "timestamp": "2025-11-30T06:28:56.0920897Z",
+    "results": [
+      {
+        "position": 1,
+        "documentId": "XSb-dZXWCjYyFe811wIEaIb5ipSCGxZDj13or3PTR4o",
+        "title": "габон объявил экономику лженаукой",
+        "url": "https://panorama.pub/news/gabon-obavil-ekonomiku-lzenaukoj-institut",
+        "category": "общество",
+        "author": "лаврентий цвейгергубер",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 2,
+        "documentId": "Wj-tM873IVjHgytc7bt0BAyQ2b7pLFdQPXmwPhCmLU0",
+        "title": "утилизационный сбор на смартфоны укрепит экономику россии",
+        "url": "https://panorama.pub/news/utilizacionnyj-sbor-na-smartfony-ukrepit",
+        "category": "экономика",
+        "author": "алексей орловский",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 3,
+        "documentId": "YeA484iRVUbalQQAezHjJibBndVbgCtsroKlVxx4ln8",
+        "title": "экономика того выросла на 20% после скармливания львам главы центробанка",
+        "url": "https://panorama.pub/news/ekonomika-togo-vyrosla-na-20",
+        "category": "экономика",
+        "author": "виталий манн",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 4,
+        "documentId": "CFJk9PpsRqGUqnzlWB-bXFavtDputj8UHKpqRnk9-14",
+        "title": "боярина чубайса наградили орденом за развал американской экономики",
+        "url": "https://panorama.pub/news/boarina-cubajsa-nagradili-za-razval",
+        "category": "политика",
+        "author": "виталий манн",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 5,
+        "documentId": "BW7Tph1uFwuGHu2zYdnSNglnlDrakMXKIA8jbQG2O9A",
+        "title": "экономика чукотки полностью ушла в тень после повреждения подводного кабеля связи",
+        "url": "https://panorama.pub/news/ekonomika-cukotki-polnostu-usla-v",
+        "category": "общество",
+        "author": "mila kuzmich",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      }
+    ],
+    "category": null,
+    "author": null,
+    "totalFound": 315,
+    "comment": null
+  },
+  {
+    "queryId": "f252728a-7c1e-4f0b-9d2f-37a24b202bc1",
+    "queryText": "технологии",
+    "timestamp": "2025-11-30T06:29:27.2523776Z",
+    "results": [
+      {
+        "position": 1,
+        "documentId": "ml8v8MWJIjfz5HFNdnv10ezbNh0VC2JrMbZcql8ucFY",
+        "title": "институт передовых интернет-технологий запустил wap-портал",
+        "url": "https://panorama.pub/news/institut-peredovyh-internet-tehnologij-zapustil",
+        "category": "общество",
+        "author": "холодный ноябрь",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 2,
+        "documentId": "GFA9v-v8uASEWSW11gyzb8Sw5wR2QNvG2QnJilxLlRc",
+        "title": "в кинешме возродили советскую технологию производства пальмового масла",
+        "url": "https://panorama.pub/news/v-kinesme-vozrodili-sovetskuu-tehnologiu",
+        "category": "общество",
+        "author": "виталий манн",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 3,
+        "documentId": "jmivwfg2SVALBXcX_a5ZbR0G4EP4aGjpUlb3sVjZqhE",
+        "title": "министр цифровых технологий дал старт хакатону по вмешательству в американские выборы",
+        "url": "https://panorama.pub/news/ministr-cifrovyh-tehnologij-dal-start",
+        "category": "политика",
+        "author": "эрвин кляйн",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 4,
+        "documentId": "xzgrK5dmENul0l0S3NsEUzcUL4fByG4zPFMUKNXNNlU",
+        "title": "«без солей пока не обойтись»: главный коммунальщик петербурга рассказал о новой технологии уборки снега",
+        "url": "https://panorama.pub/news/bez-solej-v-peterburge-poka",
+        "category": "общество",
+        "author": "стасик птичкин",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 5,
+        "documentId": "uZEh1DaopyY6SI0tK5hT6Ie_VAI3zzZ-Aac9fyZgJF4",
+        "title": "«роскосмос» изучает возможность использования спутниковых технологий для окрашивания пасхальных яиц в отдалённых регионах",
+        "url": "https://panorama.pub/news/roskosmos-rassmatrivaet-vozmoznost-ispolzovania-sputnikovyh",
+        "category": "наука",
+        "author": "эрвин кляйн",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      }
+    ],
+    "category": null,
+    "author": null,
+    "totalFound": 219,
+    "comment": null
+  },
+  {
+    "queryId": "df5c6c02-f6d6-4c4c-80dc-9de7584e6a77",
+    "queryText": "курс доллара",
+    "timestamp": "2025-11-30T06:30:18.5619218Z",
+    "results": [
+      {
+        "position": 1,
+        "documentId": "4lzse-JoiNXRaEOFr--XjLuo-NFVqrYPcIgC1AUlu64",
+        "title": "цб рекомендовал банкам указывать курс за часть доллара",
+        "url": "https://panorama.pub/news/centrobank-rekomendoval-bankam-ukazyvat-kurs",
+        "category": "экономика",
+        "author": "потап романов",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 2,
+        "documentId": "NG8XiYEONg5sV5rkRU-_Yb1vHbB7zjS_r8SFM7tUhtA",
+        "title": "россиян, нажившихся на росте курса доллара, объявят иноагентами",
+        "url": "https://panorama.pub/news/rossian-nazivsihsa-na-roste-kursa",
+        "category": "общество",
+        "author": "аполлинарий ягужинский",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 3,
+        "documentId": "QXnRc2htA0X0r62lfKrHiecdQFHV4QRqGGAgiNcF0JM",
+        "title": "на американских биржах началась паника из-за падения курса доллара ниже 100 рублей",
+        "url": "https://panorama.pub/news/na-birzah-ssa-nacalas-panika",
+        "category": "экономика",
+        "author": "антон мицкелюнас",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 4,
+        "documentId": "OeKLi_5q4UVbB8E0_x_u6mSk9v-09-ne-V_H-hl4VLw",
+        "title": "в честь падения курса доллара ниже 100 рублей 31 декабря объявлено рабочим днём",
+        "url": "https://panorama.pub/news/v-cest-padenia-kursa-dollara",
+        "category": "общество",
+        "author": "виталий манн",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 5,
+        "documentId": "elrUBIU0shXlCwkYzyTaNemGAnlhZUAhWZafmJxO7D0",
+        "title": "академик ран: «рост курса доллара связан с кампанией американцев по увеличению инфляции в россии»",
+        "url": "https://panorama.pub/news/akademik-ran-rost-kursa-dollara",
+        "category": "экономика",
+        "author": "стасик птичкин",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      }
+    ],
+    "category": null,
+    "author": null,
+    "totalFound": 355,
+    "comment": null
+  },
+  {
+    "queryId": "3ee8dae9-2f80-4b74-b1a3-73507bcbfe20",
+    "queryText": "выборы президента",
+    "timestamp": "2025-11-30T06:31:06.8414449Z",
+    "results": [
+      {
+        "position": 1,
+        "documentId": "mb9TioMJJsxc0YBgwySU5USUVARC8ppKFvJNoPWhpR0",
+        "title": "«президентка, президентша, баба-президент или просто хозяйка»: ран рассмотрит вопрос, как называть камалу харрис в случае победы на выборах",
+        "url": "https://panorama.pub/news/prezidentka-prezidentsa-baba-prezident-ili",
+        "category": "политика",
+        "author": "антон мицкелюнас",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 2,
+        "documentId": "d8hMXLqO5_dpBHDd7FNaqHWv_LEhyScDut-CVfX_VSQ",
+        "title": "чучела кандидатов, проигравших выборы президента, сожгут на масленицу",
+        "url": "https://panorama.pub/news/cucela-kandidatov-proigravsih-vybory-prezidenta",
+        "category": "политика",
+        "author": "эрвин кляйн",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 3,
+        "documentId": "eDnnWxoOIFuXAwQHVKC-PPxnICWEJ2y_GYrsKXAp3Kk",
+        "title": "польша проведёт выборы президента украины на своей территории",
+        "url": "https://panorama.pub/news/polsa-provedet-vybory-prezidenta-ukrainy",
+        "category": "политика",
+        "author": "аполлинарий ягужинский",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 4,
+        "documentId": "gjycFp2CW_WZS8W9t2Y_pHnoPOA42ApX597xs_gYDFQ",
+        "title": "цру не будет выдвигать своего кандидата на выборы президента россии 2024 года",
+        "url": "https://panorama.pub/news/cru-ne-budet-vydvigat-svoego",
+        "category": "политика",
+        "author": "эрвин кляйн",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 5,
+        "documentId": "l7Nhu5hezA3g5Eked1R3N5nNoqeJnL5MAedRYC8w5XQ",
+        "title": "мумия ленина стала официальным кандидатом от кпрф на выборах президента",
+        "url": "https://panorama.pub/news/mumia-lenina-stala-oficialnym-kandidatom",
+        "category": "политика",
+        "author": "арон шлейфман",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      }
+    ],
+    "category": null,
+    "author": null,
+    "totalFound": 1054,
+    "comment": null
+  },
+  {
+    "queryId": "4e9e4efe-b299-4180-8bb9-f7f9abd25030",
+    "queryText": "футбол россия",
+    "timestamp": "2025-11-30T06:31:40.3501104Z",
+    "results": [
+      {
+        "position": 1,
+        "documentId": "24auU4lBsepDja6Q2HphmBpXexSj6kLa19VfHQeonus",
+        "title": "доказано русское происхождение футбола",
+        "url": "https://panorama.pub/news/dokazano-russkoe-proishozdenie-futbola",
+        "category": "общество",
+        "author": "виталий манн",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 2,
+        "documentId": "dON7-LdNN5x3cnqy_J4pKQsOWu26F8DqXaWLRdOy9sI",
+        "title": "президент бразилии назвал футбол «явлением, глубоко чуждым духу социалистических завоеваний»",
+        "url": "https://panorama.pub/news/prezident-brazilii-nazval-futbol-avleniem",
+        "category": "политика",
+        "author": "борис гонтермахер",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 3,
+        "documentId": "lb0FD3JlyYXdTzNsnMmhlQ-h17HUh_BegsN1zjxbhkM",
+        "title": "сборная украины по футболу решила остаться в ес после евро-2024",
+        "url": "https://panorama.pub/news/sbornaya-ukrainy-po-futbolu",
+        "category": "политика",
+        "author": "пан порембский",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 4,
+        "documentId": "8Nv50Hz6AH41lPkMpf83UnPV4cfFW7xh2JBYxS4bSTE",
+        "title": "чтобы уравнять составы до формата 11 на 11, часть футболистов сборной россии выступят за бруней",
+        "url": "https://panorama.pub/news/ctoby-uravnat-sostavy-do-formata",
+        "category": "общество",
+        "author": "глеб мирославский",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 5,
+        "documentId": "GdUlMsUcqdyk_fX1siBJyLlbK0rIawEEDdw1X9rYVdM",
+        "title": "британские цирки оказались под угрозой банкротства из-за роста популярности женского футбола",
+        "url": "https://panorama.pub/news/britanskie-cirki-okazalis-pod-ugrozoj",
+        "category": "общество",
+        "author": "олесь вавёркин",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      }
+    ],
+    "category": null,
+    "author": null,
+    "totalFound": 1975,
+    "comment": null
+  },
+  {
+    "queryId": "92260fa3-99cd-455b-bfa8-ec7da0a50210",
+    "queryText": "последнее сказал медведев украину",
+    "timestamp": "2025-11-30T06:32:50.1727871Z",
+    "results": [
+      {
+        "position": 1,
+        "documentId": "1X0PE2TiPjqZqT-1IyTAe_wBN4F3p81GTJ7BxexBVew",
+        "title": "медведев отобрал у посла великобритании часы в знак протеста против передачи активов украине",
+        "url": "https://panorama.pub/news/medvedev-otobral-u-posla-velikobritanii",
+        "category": "политика",
+        "author": "аполлинарий ягужинский",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 2,
+        "documentId": "tiY5brCyUghl9NbV1hbvG4nDrhdiKDdRb2VjfBUo7Mg",
+        "title": "в россии ликвидировали последнее помещичье хозяйство",
+        "url": "https://panorama.pub/news/v-rossii-likvidirovali-poslednee-pomesice",
+        "category": "общество",
+        "author": "данила роттенберг",
+        "relevanceScore": 0,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 3,
+        "documentId": "0oLrfD06xfONM1Y3kyVy01NFWBAyeMipu2cDv0ZSbXo",
+        "title": "американский след: все последние обновления vk финансировались usaid",
+        "url": "https://panorama.pub/news/po-novym-rassekrecennym-dokumentam-vse",
+        "category": "политика",
+        "author": "данила роттенберг",
+        "relevanceScore": 0,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 4,
+        "documentId": "5T5Cf1BR_P-FJ7MOK7JgQD7iCWb6WzobbIiOkrwb5JU",
+        "title": "пользователь, отправивший последнее сообщение перед закрытием мессенджера icq, получит миллион долларов",
+        "url": "https://panorama.pub/news/polzovatel-otpravivsij-poslednee-soobsenie-pered",
+        "category": "общество",
+        "author": "шарль латэн",
+        "relevanceScore": 0,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 5,
+        "documentId": "ydxyHHfqJhwhf8HrmEOHsxtbBLDT3VFjq4HMx0wy6mk",
+        "title": "из-за изменения климата в шотландии погибло последнее из лохнесских чудовищ",
+        "url": "https://panorama.pub/news/iz-za-izmenenia-klimata-v",
+        "category": "общество",
+        "author": "эрвин кляйн",
+        "relevanceScore": 0,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      }
+    ],
+    "category": null,
+    "author": null,
+    "totalFound": 1877,
+    "comment": null
+  },
+  {
+    "queryId": "09edcf09-eb45-4b1c-af60-d467ede4e980",
+    "queryText": "вырос курс доллара последнюю неделю",
+    "timestamp": "2025-11-30T06:33:47.6241198Z",
+    "results": [
+      {
+        "position": 1,
+        "documentId": "4lzse-JoiNXRaEOFr--XjLuo-NFVqrYPcIgC1AUlu64",
+        "title": "цб рекомендовал банкам указывать курс за часть доллара",
+        "url": "https://panorama.pub/news/centrobank-rekomendoval-bankam-ukazyvat-kurs",
+        "category": "экономика",
+        "author": "потап романов",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 2,
+        "documentId": "NG8XiYEONg5sV5rkRU-_Yb1vHbB7zjS_r8SFM7tUhtA",
+        "title": "россиян, нажившихся на росте курса доллара, объявят иноагентами",
+        "url": "https://panorama.pub/news/rossian-nazivsihsa-na-roste-kursa",
+        "category": "общество",
+        "author": "аполлинарий ягужинский",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 3,
+        "documentId": "QXnRc2htA0X0r62lfKrHiecdQFHV4QRqGGAgiNcF0JM",
+        "title": "на американских биржах началась паника из-за падения курса доллара ниже 100 рублей",
+        "url": "https://panorama.pub/news/na-birzah-ssa-nacalas-panika",
+        "category": "экономика",
+        "author": "антон мицкелюнас",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 4,
+        "documentId": "OeKLi_5q4UVbB8E0_x_u6mSk9v-09-ne-V_H-hl4VLw",
+        "title": "в честь падения курса доллара ниже 100 рублей 31 декабря объявлено рабочим днём",
+        "url": "https://panorama.pub/news/v-cest-padenia-kursa-dollara",
+        "category": "общество",
+        "author": "виталий манн",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 5,
+        "documentId": "elrUBIU0shXlCwkYzyTaNemGAnlhZUAhWZafmJxO7D0",
+        "title": "академик ран: «рост курса доллара связан с кампанией американцев по увеличению инфляции в россии»",
+        "url": "https://panorama.pub/news/akademik-ran-rost-kursa-dollara",
+        "category": "экономика",
+        "author": "стасик птичкин",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      }
+    ],
+    "category": null,
+    "author": null,
+    "totalFound": 1070,
+    "comment": null
+  },
+  {
+    "queryId": "462b3caf-3acb-4985-b9fc-fcf717d36b8a",
+    "queryText": "какие новые санкции ввели против россии",
+    "timestamp": "2025-11-30T06:35:00.2931126Z",
+    "results": [
+      {
+        "position": 1,
+        "documentId": "GL1FdnQZMMAGFqYbp0NCSBd6ejYuzV_q4anNtkuyfD0",
+        "title": "сша и ес ввели санкции против «медного всадника»",
+        "url": "https://panorama.pub/news/ssa-i-es-vveli-sankcii",
+        "category": "политика",
+        "author": "антон мицкелюнас",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 2,
+        "documentId": "HScliPKLwohhdT_gzuvvA1BA1f3uneFT42gqeNSrpiI",
+        "title": "ес и сша ввели санкции против группы «сектор газа»",
+        "url": "https://panorama.pub/news/es-i-ssa-vveli-sankcii",
+        "category": "политика",
+        "author": "антон мицкелюнас",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 3,
+        "documentId": "MEbWGna-Z65FaRTl6gdj_gXGEdFUxfyfY_coTO497KY",
+        "title": "«хинкали для россиян без бульона»: грузия вводит санкции против россии",
+        "url": "https://panorama.pub/news/hinkali-dla-rossian-bez-bulona",
+        "category": "политика",
+        "author": "arsen",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 4,
+        "documentId": "icS4lmg9-iAIx9qCbcCH6PyIiB0-hqHu03k_hizL3EE",
+        "title": "налоги на атеизм, холодильники, рост выше 168 см и трезвость: какие новые сборы могут появиться в россии",
+        "url": "https://panorama.pub/news/nalogi-na-ateizm-holodilniki-rost",
+        "category": "экономика",
+        "author": "антон мицкелюнас",
+        "relevanceScore": 2,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 5,
+        "documentId": "vmdOvbW2enZeh3lJUgDfXQFbqGHP85YHsvdQBa0NCz8",
+        "title": "после новых санкций против российских нефтяных танкеров монголия стала мировым лидером по морским перевозкам",
+        "url": "https://panorama.pub/news/posle-vvedenia-novyh-sankcij-protiv",
+        "category": "общество",
+        "author": "бронислав рубенштейн",
+        "relevanceScore": 1,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      }
+    ],
+    "category": null,
+    "author": null,
+    "totalFound": 3218,
+    "comment": null
+  },
+  {
+    "queryId": "e899dc71-b23f-401f-87ef-547839d804a9",
+    "queryText": "какие главные спортивные события мире",
+    "timestamp": "2025-11-30T06:35:57.8185092Z",
+    "results": [
+      {
+        "position": 1,
+        "documentId": "AoYtCelL4xpy3rs-_zSsRhodlp3X1gnxX6i4Wq6UXtM",
+        "title": "историк: ранние рассказы лавкрафта были написаны по реальным событиям",
+        "url": "https://panorama.pub/news/istorik-rannie-rasskazy-lavkrafta-byli",
+        "category": "общество",
+        "author": "борис гонтермахер",
+        "relevanceScore": 0,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 2,
+        "documentId": "QJIepwGAOc4cUUY75Y2Teys_oXcqj8ih2SSLEM5YB-M",
+        "title": "стену мавзолея украсят золотой надписью в честь подвига александра овечкина",
+        "url": "https://panorama.pub/news/stenu-mavzolea-ukrasat-zolotoj-nadpisu",
+        "category": "общество",
+        "author": "лаврентий цвейгергубер",
+        "relevanceScore": 0,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 3,
+        "documentId": "6JGqB3EgC5ukrwDkY46oOnleQAGTGI82LHXGsC3KhOc",
+        "title": "израиль объявил максима каца в розыск после того, как он назвал события в секторе газа войной",
+        "url": "https://panorama.pub/news/izrail-obavil-maksima-kaca-v",
+        "category": "политика",
+        "author": "аполлинарий ягужинский",
+        "relevanceScore": 0,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 4,
+        "documentId": "CyKDLZGQdwtIBJjDjw0ATg5lu2afjw5_4zSI3qV1Cts",
+        "title": "россиянам предоставят возможность превентивного отбытия наказания по контракту",
+        "url": "https://panorama.pub/news/rossianam-predostavat-vozmoznost-preventivnogo-otbytia",
+        "category": "общество",
+        "author": "мухоморский олесь",
+        "relevanceScore": 0,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      },
+      {
+        "position": 5,
+        "documentId": "UfWRi9mBBcoETfF8M2-k55SkQPOj4G8sczwcshm4y8E",
+        "title": "каким был первый космонавт? «панорама» составила пресс-портрет юрия гагарина",
+        "url": "https://panorama.pub/news/kakim-byl-pervyj-kosmonavt-ia",
+        "category": "статьи",
+        "author": "антон мицкелюнас",
+        "relevanceScore": 0,
+        "comment": null,
+        "aiRelevanceScore": null,
+        "aiConfidence": null,
+        "aiReason": null
+      }
+    ],
+    "category": null,
+    "author": null,
+    "totalFound": 1849,
     "comment": null
   }
 ]

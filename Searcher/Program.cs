@@ -22,6 +22,7 @@ class Program
     private static readonly SynonymProvider Synonyms = new SynonymProvider();
     private static CompositeSpellChecker? CompositeSpellChecker;
     private static RerankerService? Reranker;
+    private static QwenRelevanceLabeler? RelevanceLabeler;
 
     /// <summary>
     /// Точка входа в приложение. Поддерживает два режима: индексацию статей (index) и интерактивный поиск
@@ -81,6 +82,17 @@ class Program
         }
 
         Reranker = new RerankerService();
+        if (Reranker.TryLoad())
+        {
+            Console.WriteLine("[Reranker] Модель найдена и загружена. Реранкер готов к работе.");
+        }
+        else
+        {
+            Console.WriteLine("[Reranker] Модель не найдена. Для обучения используйте команду 'train-reranker'.");
+        }
+
+        // Инициализируем Qwen Relevance Labeler для автоматической оценки релевантности
+        RelevanceLabeler = await QwenRelevanceLabeler.CreateAsync();
 
         var backupService = new ElasticsearchBackupService(elasticSearchService.Client);
 
@@ -183,6 +195,9 @@ class Program
             else if (input.ToLower().StartsWith("train-reranker"))
                 // Обучение reranker-модели и сохранение на диск
                 await HandleTrainRerankerCommand(input);
+            else if (input.ToLower().StartsWith("build-finetuning"))
+                // Подготовка датасета для fine-tuning нейросети из оценок пользователей
+                await HandleBuildFineTuningCommand(input, elasticSearchService);
             else if (input.ToLower().Trim() == "clear-evaluation")
                 // Команда clear-evaluation очищает все данные оценки
                 await HandleClearEvaluationCommand();
@@ -190,7 +205,7 @@ class Program
                 // Команда clear очищает консоль и показывает меню
                 HandleClearCommand();
             else
-                Console.WriteLine("Неизвестная команда. Используйте 'scrape', 'index', 'mine-synonyms', 'search', 'backup', 'restore', 'stats', 'evaluate', 'show-metrics', 'save-report', 'export-evaluation', 'build-reranker', 'train-reranker', 'clear-evaluation', 'clear' или 'exit'");
+                Console.WriteLine("Неизвестная команда. Используйте 'scrape', 'index', 'mine-synonyms', 'search', 'backup', 'restore', 'stats', 'evaluate', 'show-metrics', 'save-report', 'export-evaluation', 'build-reranker', 'train-reranker', 'build-finetuning', 'clear-evaluation', 'clear' или 'exit'");
         }
     }
 
@@ -357,7 +372,25 @@ class Program
             Console.WriteLine($"Показано: {result.Documents.Count}");
             Console.WriteLine(new string('-', 80));
 
-            if (Reranker?.IsReady == true && result.Documents.Count > 1)
+            // Используем нейросеть для ранжирования, если доступна
+            if (RelevanceLabeler != null && result.Documents.Count > 1)
+            {
+                Console.WriteLine("[Нейросеть] Переупорядочивание результатов...");
+                try
+                {
+                    result.Documents = await RelevanceLabeler.RerankAsync(query, result.Documents);
+                    Console.WriteLine("[Нейросеть] Порядок результатов обновлён на основе оценки релевантности.");
+                    Console.WriteLine(new string('-', 80));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Нейросеть] Ошибка ранжирования: {ex.Message}");
+                    Console.WriteLine("[Нейросеть] Используется исходный порядок результатов.");
+                    Console.WriteLine(new string('-', 80));
+                }
+            }
+            // Если нейросеть недоступна, используем ML.NET reranker
+            else if (Reranker?.IsReady == true && result.Documents.Count > 1)
             {
                 result.Documents = Reranker.Rerank(query, result.Documents);
                 Console.WriteLine("[Reranker] Порядок результатов обновлён ML-моделью.");
@@ -1074,7 +1107,7 @@ class Program
     /// <summary>
     /// Обрабатывает команду оценки качества поиска
     /// </summary>
-    /// <param name="command">Строка команды в формате "evaluate <запрос> [category=<категория>] [author=<автор>]"</param>
+    /// <param name="command">Строка команды в формате "evaluate <запрос> [--ai] [category=<категория>] [author=<автор>]"</param>
     /// <param name="elasticSearchService">Сервис для выполнения поиска</param>
     static async Task HandleEvaluateCommand(string command, ElasticSearchService elasticSearchService)
     {
@@ -1097,12 +1130,20 @@ class Program
         }
 
         var queryParts = new List<string>();
+        var useAi = false;
         string? category = null;
         string? author = null;
 
         for (int i = 0; i < tokens.Count; i++)
         {
             var token = tokens[i];
+
+            // Флаг --ai включает использование нейросети для ранжирования и подсказок
+            if (string.Equals(token, "--ai", StringComparison.OrdinalIgnoreCase))
+            {
+                useAi = true;
+                continue;
+            }
 
             if (TryParseSearchTag(token, out var tagType, out var inlineValue, out var requiresNextValue))
             {
@@ -1169,14 +1210,32 @@ class Program
                 return;
             }
             
-            // Выполняем поиск (берем до 10 результатов для оценки)
-            var result = await elasticSearchService.SearchAsync(expandedQuery, 0, 10, category, author);
+            // Выполняем поиск (берем до 5 результатов для оценки)
+            var result = await elasticSearchService.SearchAsync(expandedQuery, 0, 5, category, author);
             
             Console.WriteLine($"Найдено документов: {result.Total}");
             Console.WriteLine($"Показано для оценки: {result.Documents.Count}");
             Console.WriteLine(new string('=', 80));
 
-            if (Reranker?.IsReady == true && result.Documents.Count > 1)
+            // Используем нейросеть для ранжирования, если она включена флагом --ai и доступна
+            if (useAi && RelevanceLabeler != null && result.Documents.Count > 1)
+            {
+                Console.WriteLine("[Нейросеть] Переупорядочивание результатов для оценки...");
+                try
+                {
+                    result.Documents = await RelevanceLabeler.RerankAsync(query, result.Documents);
+                    Console.WriteLine("[Нейросеть] Для оценки используется порядок после переупорядочивания на основе нейросети.");
+                    Console.WriteLine(new string('=', 80));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Нейросеть] Ошибка ранжирования: {ex.Message}");
+                    Console.WriteLine("[Нейросеть] Используется исходный порядок результатов.");
+                    Console.WriteLine(new string('=', 80));
+                }
+            }
+            // Если нейросеть недоступна или не включена, используем ML.NET reranker
+            else if (Reranker?.IsReady == true && result.Documents.Count > 1)
             {
                 result.Documents = Reranker.Rerank(query, result.Documents);
                 Console.WriteLine("[Reranker] Для оценки используется порядок после ML-переупорядочивания.");
@@ -1216,10 +1275,56 @@ class Program
                 }
 
                 Console.WriteLine();
+
+                // Получаем оценку от нейросети, если доступна
+                int? aiRelevanceScore = null;
+                float? aiConfidence = null;
+                string? aiReason = null;
+                if (useAi && RelevanceLabeler != null)
+                {
+                    Console.WriteLine("[Нейросеть] Оценка релевантности...");
+                    try
+                    {
+                        var prediction = await RelevanceLabeler.EvaluateAsync(query, doc);
+                        if (prediction.IsSuccess)
+                        {
+                            aiRelevanceScore = prediction.Label;
+                            aiConfidence = prediction.Confidence;
+                            aiReason = prediction.Reason;
+                            var scoreLabel = aiRelevanceScore switch
+                            {
+                                0 => "Нерелевантно",
+                                1 => "Частично релевантно",
+                                2 => "Очень релевантно",
+                                _ => "Неизвестно"
+                            };
+                            Console.WriteLine($"[Нейросеть] Оценка: {aiRelevanceScore} ({scoreLabel})");
+                            Console.WriteLine($"[Нейросеть] Уверенность: {prediction.Confidence:P1}");
+                            if (!string.IsNullOrWhiteSpace(aiReason))
+                            {
+                                Console.WriteLine($"[Нейросеть] Обоснование: {aiReason}");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[Нейросеть] Ошибка оценки: {prediction.ErrorMessage}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Нейросеть] Ошибка при оценке: {ex.Message}");
+                    }
+                    Console.WriteLine();
+                }
+
                 Console.WriteLine("Оцените релевантность этого результата:");
                 Console.WriteLine("  0 - Нерелевантно (не подходит к запросу)");
                 Console.WriteLine("  1 - Частично релевантно (подходит, но не очень)");
                 Console.WriteLine("  2 - Очень релевантно (отлично подходит)");
+                if (aiRelevanceScore.HasValue)
+                {
+                    Console.WriteLine($"  [Подсказка: нейросеть оценила как {aiRelevanceScore.Value}]");
+                }
                 Console.Write("Ваша оценка (0-2): ");
 
                 int relevanceScore = 0;
@@ -1246,7 +1351,10 @@ class Program
                     Category = doc.Category,
                     Author = doc.Author,
                     RelevanceScore = relevanceScore,
-                    Comment = string.IsNullOrWhiteSpace(comment) ? null : comment
+                    Comment = string.IsNullOrWhiteSpace(comment) ? null : comment,
+                    AiRelevanceScore = aiRelevanceScore,
+                    AiConfidence = aiConfidence,
+                    AiReason = aiReason
                 });
 
                 Console.WriteLine(new string('-', 80));
@@ -1503,6 +1611,50 @@ class Program
     }
 
     /// <summary>
+    /// Подготовка датасета для fine-tuning нейросети из оценок пользователей
+    /// </summary>
+    static async Task HandleBuildFineTuningCommand(string command, ElasticSearchService elasticSearchService)
+    {
+        var arguments = command.Length > "build-finetuning".Length
+            ? command.Substring("build-finetuning".Length).Trim()
+            : string.Empty;
+        var options = ParseOptionDictionary(SplitArguments(arguments));
+
+        string? datasetPath = GetOption(options, "dataset");
+        int minRelevanceScore = GetIntOption(options, "min-score", 0);
+
+        Console.WriteLine("=== Подготовка датасета для fine-tuning нейросети ===");
+        Console.WriteLine($"Минимальная оценка релевантности: {minRelevanceScore}");
+        Console.WriteLine();
+
+        try
+        {
+            var evaluationService = new EvaluationService();
+            var builder = new FineTuningDatasetBuilder(evaluationService, elasticSearchService, datasetPath);
+
+            var report = await builder.BuildFromEvaluationsAsync(minRelevanceScore);
+
+            Console.WriteLine();
+            Console.WriteLine("=== Итоги подготовки датасета ===");
+            Console.WriteLine($"Всего примеров обработано: {report.TotalExamples}");
+            Console.WriteLine($"Успешно создано: {report.SuccessfulExamples}");
+            Console.WriteLine($"Ошибок: {report.FailedExamples}");
+            Console.WriteLine($"Файл датасета: {builder.DatasetPath}");
+            Console.WriteLine();
+            Console.WriteLine("Датасет готов для fine-tuning модели Qwen/Ollama.");
+            Console.WriteLine("Используйте этот файл для обучения кастомной модели.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка подготовки датасета: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Детали: {ex.InnerException.Message}");
+            }
+        }
+    }
+
+    /// <summary>
     /// Очищает все данные оценки
     /// </summary>
     static async Task HandleClearEvaluationCommand()
@@ -1554,7 +1706,7 @@ class Program
         Console.WriteLine("  search <запрос> [теги] - поиск по статьям");
         Console.WriteLine();
         Console.WriteLine("ОЦЕНКА КАЧЕСТВА:");
-        Console.WriteLine("  evaluate <запрос> - выполнить поиск и оценить результаты");
+        Console.WriteLine("  evaluate <запрос> [--ai] - выполнить поиск и оценить результаты (с нейросетью по флагу)");
         Console.WriteLine("  show-metrics - показать метрики качества поиска");
         Console.WriteLine("  save-report <файл.txt> - сохранить отчет в файл");
         Console.WriteLine("  export-evaluation <файл.csv> - экспорт данных в CSV");

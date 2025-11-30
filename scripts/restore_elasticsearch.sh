@@ -129,3 +129,7 @@ curl -s -u "$USERNAME:$PASSWORD" -X POST "$ELASTICSEARCH_URL/_refresh" > /dev/nu
 
 echo "Восстановление завершено успешно!"
 
+
+
+
+

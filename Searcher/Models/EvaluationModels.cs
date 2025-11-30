@@ -92,6 +92,21 @@ public class ResultRelevance
     /// Комментарий оценщика к результату
     /// </summary>
     public string? Comment { get; set; }
+    
+    /// <summary>
+    /// Оценка релевантности от нейросети (если была получена)
+    /// </summary>
+    public int? AiRelevanceScore { get; set; }
+    
+    /// <summary>
+    /// Уверенность нейросети в оценке (0-1)
+    /// </summary>
+    public float? AiConfidence { get; set; }
+    
+    /// <summary>
+    /// Обоснование оценки от нейросети
+    /// </summary>
+    public string? AiReason { get; set; }
 }
 
 /// <summary>
@@ -210,4 +225,7 @@ public class OverallEvaluationStats
     /// </summary>
     public DateTime LastUpdated { get; set; }
 }
+
+
+
 
