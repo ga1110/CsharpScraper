@@ -40,6 +40,34 @@ public class RerankerSample
         };
     }
 
+    /// <summary>
+    /// Создает RerankerSample из пользовательской оценки (без использования Qwen)
+    /// </summary>
+    public static RerankerSample FromUserEvaluation(
+        string queryId,
+        string queryText,
+        ArticleDocument doc,
+        int userRelevanceScore,
+        int position)
+    {
+        // Для пользовательских оценок confidence всегда 1.0 (полная уверенность)
+        return new RerankerSample
+        {
+            QueryId = queryId,
+            QueryText = queryText,
+            DocumentId = doc.Id,
+            Title = doc.Title ?? string.Empty,
+            ContentSnippet = Trim(doc.Content),
+            Category = string.IsNullOrWhiteSpace(doc.Category) ? null : doc.Category,
+            Author = string.IsNullOrWhiteSpace(doc.Author) ? null : doc.Author,
+            ElasticScore = doc.ElasticScore,
+            Position = position,
+            Label = userRelevanceScore, // Используем оценку пользователя напрямую
+            Confidence = 1.0f, // Пользовательская оценка считается полностью уверенной
+            Timestamp = DateTime.UtcNow
+        };
+    }
+
     private static string Trim(string? content)
     {
         if (string.IsNullOrWhiteSpace(content))

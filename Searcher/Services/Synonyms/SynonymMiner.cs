@@ -1,6 +1,7 @@
 using Scraper.Models;
 using Searcher.Models;
 using Searcher.Services.StopWords;
+using Searcher.Services.TextProcessing;
 
 namespace Searcher.Services.Synonyms;
 
@@ -57,7 +58,10 @@ public class SynonymMiner
         // Шаг 4: Вычисляем статистику
         var statistics = CalculateStatistics(similarities, validatedSynonyms, articles);
 
-        // Шаг 5: Вычисляем оценки уверенности
+        // Шаг 5: Добавляем предопределенные синонимы
+        AddPredefinedSynonyms(validatedSynonyms);
+
+        // Шаг 6: Вычисляем оценки уверенности
         var confidenceScores = CalculateConfidenceScores(validatedSynonyms, similarities);
 
         var endTime = DateTime.UtcNow;
@@ -194,6 +198,42 @@ public class SynonymMiner
         }
 
         return await MineSynonymsAsync(articles, options);
+    }
+
+    /// <summary>
+    /// Добавляет предопределенные синонимы в словарь.
+    /// </summary>
+    private void AddPredefinedSynonyms(Dictionary<string, HashSet<string>> synonyms)
+    {
+        // Синонимы для спорта: двусторонние связи между "спорт" и видами спорта
+        var sportTypes = new[] { "хоккей", "футбол", "баскетбол", "теннис", "волейбол", "бокс", "плавание", "легкая атлетика" };
+        var sportWord = "спорт";
+        
+        // Нормализуем общее слово
+        var normalizedSport = TextPreprocessor.Normalize(sportWord);
+        if (string.IsNullOrEmpty(normalizedSport))
+            return;
+        
+        // Добавляем "спорт" в словарь с видами спорта как синонимами
+        if (!synonyms.ContainsKey(normalizedSport))
+            synonyms[normalizedSport] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        
+        // Для каждого вида спорта добавляем двусторонние связи
+        foreach (var sportType in sportTypes)
+        {
+            var normalizedType = TextPreprocessor.Normalize(sportType);
+            if (string.IsNullOrEmpty(normalizedType))
+                continue;
+            
+            // Добавляем вид спорта к "спорт"
+            synonyms[normalizedSport].Add(normalizedType);
+            
+            // Добавляем "спорт" к виду спорта
+            if (!synonyms.ContainsKey(normalizedType))
+                synonyms[normalizedType] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            
+            synonyms[normalizedType].Add(normalizedSport);
+        }
     }
 }
 

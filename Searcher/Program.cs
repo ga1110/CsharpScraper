@@ -143,6 +143,13 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0].Equals("generate-dataset", StringComparison.OrdinalIgnoreCase))
+        {
+            var command = string.Join(' ', args);
+            await HandleGenerateDatasetCommand(command, elasticSearchService);
+            return;
+        }
+
         ShowMainMenu();
 
         while (true)
@@ -198,6 +205,12 @@ class Program
             else if (input.ToLower().StartsWith("build-finetuning"))
                 // Подготовка датасета для fine-tuning нейросети из оценок пользователей
                 await HandleBuildFineTuningCommand(input, elasticSearchService);
+            else if (input.ToLower().StartsWith("view-dataset"))
+                // Команда view-dataset показывает результаты оценки Qwen из датасета
+                await HandleViewDatasetCommand(input);
+            else if (input.ToLower().StartsWith("generate-dataset"))
+                // Команда generate-dataset автоматически генерирует датасет для обучения с помощью Qwen
+                await HandleGenerateDatasetCommand(input, elasticSearchService);
             else if (input.ToLower().Trim() == "clear-evaluation")
                 // Команда clear-evaluation очищает все данные оценки
                 await HandleClearEvaluationCommand();
@@ -205,7 +218,7 @@ class Program
                 // Команда clear очищает консоль и показывает меню
                 HandleClearCommand();
             else
-                Console.WriteLine("Неизвестная команда. Используйте 'scrape', 'index', 'mine-synonyms', 'search', 'backup', 'restore', 'stats', 'evaluate', 'show-metrics', 'save-report', 'export-evaluation', 'build-reranker', 'train-reranker', 'build-finetuning', 'clear-evaluation', 'clear' или 'exit'");
+                Console.WriteLine("Неизвестная команда. Используйте 'scrape', 'index', 'mine-synonyms', 'search', 'backup', 'restore', 'stats', 'evaluate', 'show-metrics', 'save-report', 'export-evaluation', 'build-reranker', 'train-reranker', 'build-finetuning', 'view-dataset', 'generate-dataset', 'clear-evaluation', 'clear' или 'exit'");
         }
     }
 
@@ -512,6 +525,13 @@ class Program
     }
 
     static int GetIntOption(Dictionary<string, string> options, string key, int defaultValue)
+    {
+        if (options.TryGetValue(key, out var value) && int.TryParse(value, out var parsed))
+            return parsed;
+        return defaultValue;
+    }
+
+    static int? GetIntOptionNullable(Dictionary<string, string> options, string key, int? defaultValue)
     {
         if (options.TryGetValue(key, out var value) && int.TryParse(value, out var parsed))
             return parsed;
@@ -1525,7 +1545,9 @@ class Program
     }
 
     /// <summary>
-    /// Сбор 5k запросов и автоматическая разметка релевантности через Qwen
+    /// Сбор датасета для обучения
+    /// С флагом --interactive: автоматически генерирует запросы, но оценка производится вручную
+    /// Без флага: собирает датасет из уже существующих пользовательских оценок
     /// </summary>
     static async Task HandleBuildRerankerCommand(string command, ElasticSearchService elasticSearchService)
     {
@@ -1534,35 +1556,722 @@ class Program
             : string.Empty;
         var options = ParseOptionDictionary(SplitArguments(arguments));
 
-        int queryCount = GetIntOption(options, "queries", 5000);
-        int docsPerQuery = GetIntOption(options, "docs", 20);
-        string? datasetPath = GetOption(options, "dataset");
+        bool interactive = options.ContainsKey("interactive") || options.ContainsKey("manual");
+        int queryCount = GetIntOption(options, "queries", interactive ? 1000 : 0);
+        int docsPerQuery = GetIntOption(options, "docs", 5);
         string? articlesPath = GetOption(options, "articles");
-        string? ollamaUrl = GetOption(options, "ollama");
-        string? modelName = GetOption(options, "model");
+        bool useAi = options.ContainsKey("ai");
 
-        var generator = new QueryGenerator(articlesPath);
-        var labeler = await QwenRelevanceLabeler.CreateAsync(ollamaUrl, modelName);
-        if (labeler == null)
+        // Интерактивный режим: генерация запросов + ручная оценка
+        if (interactive)
         {
-            Console.WriteLine("Qwen недоступен. Проверьте Ollama и параметры подключения.");
+            await HandleInteractiveBuildRerankerCommand(
+                elasticSearchService, 
+                queryCount, 
+                docsPerQuery, 
+                articlesPath, 
+                useAi);
             return;
         }
 
-        using (labeler)
+        // Режим сборки из существующих оценок
+        string? datasetPath = GetOption(options, "dataset");
+        int minRelevanceScore = GetIntOption(options, "min-score", 0);
+
+        Console.WriteLine("=== Сбор датасета из пользовательских оценок ===");
+        Console.WriteLine("ВАЖНО: Используются только оценки пользователей, не автоматическая разметка через Qwen");
+        Console.WriteLine($"Минимальная оценка релевантности: {minRelevanceScore}");
+        Console.WriteLine();
+
+        try
         {
-            var builder = new RerankerDatasetBuilder(elasticSearchService, generator, labeler, datasetPath);
-            try
+            var evaluationService = new EvaluationService();
+            var evaluations = await evaluationService.LoadAllEvaluationsAsync();
+
+            if (evaluations.Count == 0)
             {
-                var report = await builder.BuildAsync(queryCount, docsPerQuery);
-                Console.WriteLine($"[Dataset] Добавлено запросов: {report.GeneratedQueries}, пар: {report.GeneratedPairs}");
-                Console.WriteLine($"[Dataset] Всего запросов: {report.TotalQueries}, пар: {report.TotalPairs}");
-                Console.WriteLine($"[Dataset] Файл: {builder.DatasetPath}");
+                Console.WriteLine("Нет пользовательских оценок для создания датасета.");
+                Console.WriteLine("Сначала выполните команду 'evaluate <запрос>' для сбора оценок.");
+                Console.WriteLine();
+                return;
             }
-            catch (Exception ex)
+
+            // Определяем путь к датасету
+            if (string.IsNullOrWhiteSpace(datasetPath))
             {
-                Console.WriteLine($"Ошибка сбора датасета: {ex.Message}");
+                var projectRoot = GetProjectRoot();
+                datasetPath = Path.Combine(projectRoot, "data", "reranker", "dataset.jsonl");
             }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(datasetPath)!);
+
+            var jsonOptions = new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                WriteIndented = false
+            };
+
+            var totalExamples = 0;
+            var successfulExamples = 0;
+            var failedExamples = 0;
+
+            await using var stream = new FileStream(datasetPath, FileMode.Create, FileAccess.Write, FileShare.Read);
+            await using var writer = new StreamWriter(stream);
+
+            foreach (var evaluation in evaluations)
+            {
+                foreach (var result in evaluation.Results)
+                {
+                    // Пропускаем результаты с низкой оценкой релевантности
+                    if (result.RelevanceScore < minRelevanceScore)
+                        continue;
+
+                    totalExamples++;
+
+                    try
+                    {
+                        // Получаем полный документ из ElasticSearch
+                        var response = await elasticSearchService.Client.GetAsync<ArticleDocument>(
+                            result.DocumentId,
+                            g => g.Index("articles"));
+
+                        if (!response.IsValidResponse || response.Source == null)
+                        {
+                            Console.WriteLine($"[Dataset] Документ {result.DocumentId} не найден в индексе");
+                            failedExamples++;
+                            continue;
+                        }
+
+                        var doc = response.Source;
+                        doc.Id = result.DocumentId;
+
+                        // Создаем пример из пользовательской оценки (БЕЗ использования Qwen)
+                        var sample = RerankerSample.FromUserEvaluation(
+                            evaluation.QueryId,
+                            evaluation.QueryText,
+                            doc,
+                            result.RelevanceScore,
+                            result.Position);
+
+                        // Сохраняем в JSONL формате
+                        var jsonLine = System.Text.Json.JsonSerializer.Serialize(sample, jsonOptions);
+                        await writer.WriteLineAsync(jsonLine);
+                        successfulExamples++;
+
+                        if (successfulExamples % 10 == 0)
+                        {
+                            Console.WriteLine($"[Dataset] Обработано примеров: {successfulExamples}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Dataset] Ошибка при обработке примера: {ex.Message}");
+                        failedExamples++;
+                    }
+                }
+            }
+
+            await writer.FlushAsync();
+
+            Console.WriteLine();
+            Console.WriteLine("=== Итоги сбора датасета ===");
+            Console.WriteLine($"Всего примеров обработано: {totalExamples}");
+            Console.WriteLine($"Успешно создано: {successfulExamples}");
+            Console.WriteLine($"Ошибок: {failedExamples}");
+            Console.WriteLine($"Файл датасета: {datasetPath}");
+            Console.WriteLine();
+            Console.WriteLine("Датасет создан из пользовательских оценок (без использования Qwen для разметки).");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка сбора датасета: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Детали: {ex.InnerException.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Интерактивный режим сборки датасета: автоматическая генерация запросов + ручная оценка
+    /// </summary>
+    static async Task HandleInteractiveBuildRerankerCommand(
+        ElasticSearchService elasticSearchService,
+        int queryCount,
+        int docsPerQuery,
+        string? articlesPath,
+        bool useAi)
+    {
+        Console.WriteLine("=== Интерактивный сбор датасета ===");
+        Console.WriteLine("Автоматическая генерация запросов + ручная оценка результатов");
+        Console.WriteLine($"Целевое количество запросов: {queryCount}");
+        Console.WriteLine($"Документов на запрос: {docsPerQuery}");
+        if (useAi)
+            Console.WriteLine("Используются подсказки от Qwen");
+        Console.WriteLine();
+
+        try
+        {
+            var generator = new QueryGenerator(articlesPath);
+            var evaluationService = new EvaluationService();
+            var existingEvaluations = await evaluationService.LoadAllEvaluationsAsync();
+            var existingQueryTexts = new HashSet<string>(
+                existingEvaluations.Select(e => e.QueryText), 
+                StringComparer.OrdinalIgnoreCase);
+
+            Console.WriteLine($"Уже оценено запросов: {existingQueryTexts.Count}");
+            Console.WriteLine($"Нужно ещё: {queryCount - existingQueryTexts.Count}");
+            Console.WriteLine();
+
+            // Загружаем все статьи из файла для выбора
+            Console.WriteLine("Загрузка статей из файла...");
+            var allArticles = await LoadAllArticlesAsync(articlesPath);
+            if (allArticles.Count == 0)
+            {
+                Console.WriteLine("Не удалось загрузить статьи из файла.");
+                return;
+            }
+            Console.WriteLine($"Загружено статей: {allArticles.Count}");
+            Console.WriteLine();
+
+            QwenRelevanceLabeler? labeler = null;
+            if (useAi)
+            {
+                labeler = await QwenRelevanceLabeler.CreateAsync();
+                if (labeler == null)
+                {
+                    Console.WriteLine("Qwen недоступен, продолжаем без подсказок.");
+                    Console.WriteLine();
+                }
+            }
+
+            int evaluatedCount = 0;
+            int skippedCount = 0;
+            var usedQueryTexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Генерируем и обрабатываем запросы по одному
+            while (evaluatedCount + skippedCount < queryCount - existingQueryTexts.Count)
+            {
+                // Генерируем один новый запрос
+                var candidateQueries = await generator.GenerateQueriesAsync(100);
+                var newQuery = candidateQueries
+                    .Where(q => !existingQueryTexts.Contains(q.QueryText) && !usedQueryTexts.Contains(q.QueryText))
+                    .FirstOrDefault();
+
+                if (newQuery == null)
+                {
+                    Console.WriteLine("Не удалось сгенерировать новые уникальные запросы.");
+                    Console.WriteLine("Все запросы уже оценены или недостаточно статей для генерации.");
+                    break;
+                }
+
+                usedQueryTexts.Add(newQuery.QueryText);
+
+                Console.WriteLine(new string('=', 80));
+                Console.WriteLine($"Запрос {evaluatedCount + skippedCount + 1}/{queryCount - existingQueryTexts.Count}: {newQuery.QueryText}");
+                Console.WriteLine(new string('=', 80));
+                Console.WriteLine();
+
+                // Вызываем evaluate для этого запроса с общим списком статей
+                var evaluation = await HandleEvaluateForInteractiveAsync(
+                    elasticSearchService,
+                    newQuery.QueryText,
+                    newQuery.QueryId,
+                    newQuery.Category,
+                    newQuery.Author,
+                    allArticles,
+                    docsPerQuery,
+                    useAi,
+                    labeler);
+
+                if (evaluation == null)
+                {
+                    Console.WriteLine("Пропуск этого запроса.");
+                    skippedCount++;
+                    Console.WriteLine();
+                    continue;
+                }
+
+                if (evaluation.Results.Count == 0)
+                {
+                    Console.WriteLine("Не выбрано ни одной статьи. Пропускаем этот запрос.");
+                    skippedCount++;
+                    Console.WriteLine();
+                    continue;
+                }
+
+                // Сохраняем оценку
+                await evaluationService.SaveQueryEvaluationAsync(evaluation);
+                evaluatedCount++;
+                Console.WriteLine($"Оценка сохранена. Оценено запросов: {evaluatedCount}/{queryCount - existingQueryTexts.Count}");
+                Console.WriteLine();
+            }
+
+            labeler?.Dispose();
+
+            Console.WriteLine();
+            Console.WriteLine("=== Итоги интерактивной оценки ===");
+            Console.WriteLine($"Оценено запросов: {evaluatedCount}");
+            Console.WriteLine($"Пропущено запросов: {skippedCount}");
+            Console.WriteLine($"Всего обработано: {evaluatedCount + skippedCount}");
+            Console.WriteLine();
+            Console.WriteLine("Используйте команду 'build-reranker' (без --interactive) для создания датасета из оценок.");
+            Console.WriteLine();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка интерактивной оценки: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Детали: {ex.InnerException.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Загружает все статьи из файла
+    /// </summary>
+    static async Task<List<Article>> LoadAllArticlesAsync(string? articlesPath)
+    {
+        var path = articlesPath;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var projectRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
+            path = Path.Combine(projectRoot, "articles.json");
+            if (!File.Exists(path))
+            {
+                path = Path.GetFullPath("articles.json");
+            }
+        }
+
+        if (!File.Exists(path))
+        {
+            return new List<Article>();
+        }
+
+        var jsonOptions = new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            Converters = { new CustomDateTimeConverter() }
+        };
+
+        try
+        {
+            await using var stream = File.OpenRead(path);
+            var articles = await System.Text.Json.JsonSerializer.DeserializeAsync<List<Article>>(stream, jsonOptions);
+            return articles ?? new List<Article>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при загрузке статей: {ex.Message}");
+            return new List<Article>();
+        }
+    }
+
+    /// <summary>
+    /// Выполняет evaluate для интерактивного режима с возможностью выбора из общего списка статей
+    /// </summary>
+    static async Task<QueryEvaluation?> HandleEvaluateForInteractiveAsync(
+        ElasticSearchService elasticSearchService,
+        string queryText,
+        string queryId,
+        string? category,
+        string? author,
+        List<Article> allArticles,
+        int docsPerQuery,
+        bool useAi,
+        QwenRelevanceLabeler? labeler)
+    {
+        // Расширяем запрос синонимами
+        var expandedQuery = Synonyms.ExpandQuery(queryText);
+        
+        Console.WriteLine($"Выполняется поиск для оценки: '{expandedQuery}'");
+        if (!string.IsNullOrEmpty(category))
+            Console.WriteLine($"Категория: {category}");
+        if (!string.IsNullOrEmpty(author))
+            Console.WriteLine($"Автор: {author}");
+        Console.WriteLine();
+
+        try
+        {
+            // Проверяем, что индекс существует
+            var totalDocs = await elasticSearchService.GetTotalDocumentsAsync();
+            if (totalDocs == 0)
+            {
+                Console.WriteLine("Индекс пуст или не существует.");
+                return null;
+            }
+            
+            // Выполняем поиск
+            var result = await elasticSearchService.SearchAsync(expandedQuery, 0, docsPerQuery, category, author);
+            
+            Console.WriteLine($"Найдено документов: {result.Total}");
+            Console.WriteLine($"Показано для оценки: {result.Documents.Count}");
+            Console.WriteLine(new string('=', 80));
+
+            // Используем нейросеть для ранжирования, если она включена флагом --ai и доступна
+            if (useAi && labeler != null && result.Documents.Count > 1)
+            {
+                Console.WriteLine("[Нейросеть] Переупорядочивание результатов для оценки...");
+                try
+                {
+                    result.Documents = await labeler.RerankAsync(queryText, result.Documents);
+                    Console.WriteLine("[Нейросеть] Для оценки используется порядок после переупорядочивания на основе нейросети.");
+                    Console.WriteLine(new string('=', 80));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Нейросеть] Ошибка ранжирования: {ex.Message}");
+                    Console.WriteLine("[Нейросеть] Используется исходный порядок результатов.");
+                    Console.WriteLine(new string('=', 80));
+                }
+            }
+            // Если нейросеть недоступна или не включена, используем ML.NET reranker
+            else if (Reranker?.IsReady == true && result.Documents.Count > 1)
+            {
+                result.Documents = Reranker.Rerank(queryText, result.Documents);
+                Console.WriteLine("[Reranker] Для оценки используется порядок после ML-переупорядочивания.");
+                Console.WriteLine(new string('=', 80));
+            }
+
+            var evaluation = new QueryEvaluation
+            {
+                QueryId = queryId,
+                QueryText = queryText,
+                Timestamp = DateTime.UtcNow,
+                Category = category,
+                Author = author,
+                TotalFound = result.Total
+            };
+
+            // Показываем результаты поиска и собираем оценки
+            var searchResultIds = new HashSet<string>(result.Documents.Select(d => d.Id), StringComparer.OrdinalIgnoreCase);
+            var evaluatedDocuments = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Оцениваем результаты поиска
+            for (int i = 0; i < result.Documents.Count; i++)
+            {
+                var doc = result.Documents[i];
+                Console.WriteLine($"{i + 1}. {doc.Title}");
+                Console.WriteLine($"   URL: {doc.Url}");
+                if (!string.IsNullOrEmpty(doc.Category))
+                    Console.WriteLine($"   Категория: {doc.Category}");
+                if (!string.IsNullOrEmpty(doc.Author))
+                    Console.WriteLine($"   Автор: {doc.Author}");
+                if (doc.PublishDate.HasValue)
+                    Console.WriteLine($"   Дата: {doc.PublishDate.Value:yyyy-MM-dd HH:mm}");
+
+                // Показываем фрагмент содержимого
+                if (!string.IsNullOrEmpty(doc.Content))
+                {
+                    var preview = doc.Content.Length > 200 
+                        ? doc.Content.Substring(0, 200) + " [обрезано]" 
+                        : doc.Content;
+                    Console.WriteLine($"   Содержание: {preview}");
+                }
+
+                Console.WriteLine();
+
+                // Получаем оценку от нейросети, если доступна
+                int? aiRelevanceScore = null;
+                float? aiConfidence = null;
+                string? aiReason = null;
+                if (useAi && labeler != null)
+                {
+                    Console.WriteLine("[Нейросеть] Оценка релевантности...");
+                    try
+                    {
+                        var prediction = await labeler.EvaluateAsync(queryText, doc);
+                        if (prediction.IsSuccess)
+                        {
+                            aiRelevanceScore = prediction.Label;
+                            aiConfidence = prediction.Confidence;
+                            aiReason = prediction.Reason;
+                            var scoreLabel = aiRelevanceScore switch
+                            {
+                                0 => "Нерелевантно",
+                                1 => "Частично релевантно",
+                                2 => "Очень релевантно",
+                                _ => "Неизвестно"
+                            };
+                            Console.WriteLine($"[Нейросеть] Оценка: {aiRelevanceScore} ({scoreLabel})");
+                            Console.WriteLine($"[Нейросеть] Уверенность: {prediction.Confidence:P1}");
+                            if (!string.IsNullOrWhiteSpace(aiReason))
+                            {
+                                Console.WriteLine($"[Нейросеть] Обоснование: {aiReason}");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[Нейросеть] Ошибка оценки: {prediction.ErrorMessage}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Нейросеть] Ошибка при оценке: {ex.Message}");
+                    }
+                    Console.WriteLine();
+                }
+
+                Console.WriteLine("Оцените релевантность этого результата:");
+                Console.WriteLine("  0 - Нерелевантно (не подходит к запросу)");
+                Console.WriteLine("  1 - Частично релевантно (подходит, но не очень)");
+                Console.WriteLine("  2 - Очень релевантно (отлично подходит)");
+                if (aiRelevanceScore.HasValue)
+                {
+                    Console.WriteLine($"  [Подсказка: нейросеть оценила как {aiRelevanceScore.Value}]");
+                }
+                Console.Write("Ваша оценка (0-2, 's' для пропуска, 'b' для выбора из общего списка, 'q' для выхода): ");
+
+                int relevanceScore = 0;
+                var input = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(input))
+                {
+                    Console.WriteLine("Пропущено, используется 0 (нерелевантно)");
+                    input = "0";
+                }
+
+                if (input.ToLower() == "q")
+                {
+                    return null; // Прерывание
+                }
+
+                if (input.ToLower() == "s")
+                {
+                    Console.WriteLine("Пропуск этого результата.");
+                    Console.WriteLine(new string('-', 80));
+                    continue;
+                }
+
+                if (input.ToLower() == "b")
+                {
+                    // Переходим к выбору из общего списка
+                    Console.WriteLine("Переход к выбору из общего списка статей...");
+                    Console.WriteLine(new string('-', 80));
+                    break;
+                }
+
+                if (int.TryParse(input, out var score) && score >= 0 && score <= 2)
+                {
+                    relevanceScore = score;
+                }
+                else
+                {
+                    Console.WriteLine("Некорректная оценка, используется 0 (нерелевантно)");
+                }
+
+                // Опциональный комментарий
+                Console.Write("Комментарий (необязательно): ");
+                var comment = Console.ReadLine();
+
+                evaluation.Results.Add(new ResultRelevance
+                {
+                    Position = i + 1,
+                    DocumentId = doc.Id,
+                    Title = doc.Title,
+                    Url = doc.Url,
+                    Category = doc.Category,
+                    Author = doc.Author,
+                    RelevanceScore = relevanceScore,
+                    Comment = string.IsNullOrWhiteSpace(comment) ? null : comment,
+                    AiRelevanceScore = aiRelevanceScore,
+                    AiConfidence = aiConfidence,
+                    AiReason = aiReason
+                });
+
+                evaluatedDocuments.Add(doc.Id);
+                Console.WriteLine(new string('-', 80));
+            }
+
+            // Предлагаем выбрать из общего списка статей
+            Console.WriteLine();
+            Console.WriteLine("=== Выбор из общего списка статей ===");
+            Console.WriteLine($"Всего статей в базе: {allArticles.Count}");
+            Console.WriteLine("Вы можете выбрать дополнительные статьи для оценки.");
+            Console.WriteLine("Показать список статей? (y/n, 'q' для выхода): ");
+            Console.Write("Ваш выбор: ");
+
+            var selectionInput = Console.ReadLine();
+            if (selectionInput?.ToLower() == "q")
+            {
+                return null;
+            }
+
+            if (selectionInput?.ToLower() == "y" || selectionInput?.ToLower() == "yes")
+            {
+                // Показываем список статей для выбора
+                Console.WriteLine();
+                Console.WriteLine("Список статей (первые 50):");
+                var displayCount = Math.Min(50, allArticles.Count);
+                for (int i = 0; i < displayCount; i++)
+                {
+                    var article = allArticles[i];
+                    Console.WriteLine($"{i + 1}. {article.Title}");
+                    if (!string.IsNullOrEmpty(article.Category))
+                        Console.WriteLine($"   Категория: {article.Category}");
+                    if (!string.IsNullOrEmpty(article.Author))
+                        Console.WriteLine($"   Автор: {article.Author}");
+                }
+                Console.WriteLine();
+
+                // Позволяем выбрать несколько статей
+                var selectedArticles = new List<Article>();
+                while (true)
+                {
+                    Console.Write($"Введите номер статьи для оценки (1-{displayCount}, или 'done' для завершения, 'q' для выхода): ");
+                    var articleInput = Console.ReadLine();
+                    
+                    if (articleInput?.ToLower() == "q")
+                    {
+                        return null;
+                    }
+                    
+                    if (articleInput?.ToLower() == "done")
+                    {
+                        break;
+                    }
+
+                    if (int.TryParse(articleInput, out var articleIndex) && articleIndex >= 1 && articleIndex <= displayCount)
+                    {
+                        var selectedArticle = allArticles[articleIndex - 1];
+                        if (!selectedArticles.Contains(selectedArticle))
+                        {
+                            selectedArticles.Add(selectedArticle);
+                            Console.WriteLine($"Добавлена статья: {selectedArticle.Title}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("Эта статья уже добавлена.");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Некорректный номер статьи. Введите число от 1 до {displayCount}.");
+                    }
+                }
+
+                // Оцениваем выбранные статьи
+                foreach (var article in selectedArticles)
+                {
+                    // Преобразуем Article в ArticleDocument для оценки
+                    var doc = new ArticleDocument
+                    {
+                        Id = article.Url.GetHashCode().ToString(), // Простой способ получить ID
+                        Title = article.Title,
+                        Url = article.Url,
+                        Content = article.Content,
+                        Category = article.Category,
+                        Author = article.Author,
+                        PublishDate = article.PublishDate,
+                        CommentCount = article.CommentCount,
+                        ImageUrl = article.ImageUrl
+                    };
+
+                    Console.WriteLine();
+                    Console.WriteLine($"Статья: {doc.Title}");
+                    Console.WriteLine($"   URL: {doc.Url}");
+                    if (!string.IsNullOrEmpty(doc.Category))
+                        Console.WriteLine($"   Категория: {doc.Category}");
+                    if (!string.IsNullOrEmpty(doc.Author))
+                        Console.WriteLine($"   Автор: {doc.Author}");
+                    if (doc.PublishDate.HasValue)
+                        Console.WriteLine($"   Дата: {doc.PublishDate.Value:yyyy-MM-dd HH:mm}");
+
+                    if (!string.IsNullOrEmpty(doc.Content))
+                    {
+                        var preview = doc.Content.Length > 200 
+                            ? doc.Content.Substring(0, 200) + " [обрезано]" 
+                            : doc.Content;
+                        Console.WriteLine($"   Содержание: {preview}");
+                    }
+                    Console.WriteLine();
+
+                    // Получаем оценку от нейросети, если доступна
+                    int? aiRelevanceScore = null;
+                    float? aiConfidence = null;
+                    string? aiReason = null;
+                    if (useAi && labeler != null)
+                    {
+                        try
+                        {
+                            var prediction = await labeler.EvaluateAsync(queryText, doc);
+                            if (prediction.IsSuccess)
+                            {
+                                aiRelevanceScore = prediction.Label;
+                                aiConfidence = prediction.Confidence;
+                                aiReason = prediction.Reason;
+                                var scoreLabel = aiRelevanceScore switch
+                                {
+                                    0 => "Нерелевантно",
+                                    1 => "Частично релевантно",
+                                    2 => "Очень релевантно",
+                                    _ => "Неизвестно"
+                                };
+                                Console.WriteLine($"[Нейросеть] Оценка: {aiRelevanceScore} ({scoreLabel})");
+                                Console.WriteLine($"[Нейросеть] Уверенность: {prediction.Confidence:P1}");
+                                if (!string.IsNullOrWhiteSpace(aiReason))
+                                {
+                                    Console.WriteLine($"[Нейросеть] Обоснование: {aiReason}");
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[Нейросеть] Ошибка при оценке: {ex.Message}");
+                        }
+                        Console.WriteLine();
+                    }
+
+                    Console.WriteLine("Оцените релевантность этой статьи:");
+                    Console.WriteLine("  0 - Нерелевантно (не подходит к запросу)");
+                    Console.WriteLine("  1 - Частично релевантно (подходит, но не очень)");
+                    Console.WriteLine("  2 - Очень релевантно (отлично подходит)");
+                    if (aiRelevanceScore.HasValue)
+                    {
+                        Console.WriteLine($"  [Подсказка: нейросеть оценила как {aiRelevanceScore.Value}]");
+                    }
+                    Console.Write("Ваша оценка (0-2): ");
+
+                    int relevanceScore = 0;
+                    var scoreInput = Console.ReadLine();
+                    if (int.TryParse(scoreInput, out var score) && score >= 0 && score <= 2)
+                    {
+                        relevanceScore = score;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Некорректная оценка, используется 0 (нерелевантно)");
+                    }
+
+                    Console.Write("Комментарий (необязательно): ");
+                    var comment = Console.ReadLine();
+
+                    evaluation.Results.Add(new ResultRelevance
+                    {
+                        Position = evaluation.Results.Count + 1,
+                        DocumentId = doc.Id,
+                        Title = doc.Title,
+                        Url = doc.Url,
+                        Category = doc.Category,
+                        Author = doc.Author,
+                        RelevanceScore = relevanceScore,
+                        Comment = string.IsNullOrWhiteSpace(comment) ? null : comment,
+                        AiRelevanceScore = aiRelevanceScore,
+                        AiConfidence = aiConfidence,
+                        AiReason = aiReason
+                    });
+
+                    Console.WriteLine(new string('-', 80));
+                }
+            }
+
+            return evaluation;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при оценке: {ex.Message}");
+            return null;
         }
     }
 
@@ -1655,6 +2364,261 @@ class Program
     }
 
     /// <summary>
+    /// Показывает результаты оценки Qwen из датасета
+    /// </summary>
+    static async Task HandleViewDatasetCommand(string command)
+    {
+        var arguments = command.Length > "view-dataset".Length
+            ? command.Substring("view-dataset".Length).Trim()
+            : string.Empty;
+        var options = ParseOptionDictionary(SplitArguments(arguments));
+
+        string? datasetPath = GetOption(options, "dataset");
+        int limit = GetIntOption(options, "limit", 10);
+        string? queryFilter = GetOption(options, "query");
+        int? labelFilter = GetIntOptionNullable(options, "label", null);
+
+        // Определяем путь к датасету
+        if (string.IsNullOrWhiteSpace(datasetPath))
+        {
+            var projectRoot = GetProjectRoot();
+            datasetPath = Path.Combine(projectRoot, "data", "reranker", "dataset.jsonl");
+        }
+
+        if (!File.Exists(datasetPath))
+        {
+            Console.WriteLine($"Файл датасета не найден: {datasetPath}");
+            Console.WriteLine("Сначала выполните команду 'build-reranker' для создания датасета.");
+            Console.WriteLine();
+            return;
+        }
+
+        Console.WriteLine($"=== Результаты оценки Qwen из датасета ===");
+        Console.WriteLine($"Файл: {datasetPath}");
+        Console.WriteLine();
+
+        var jsonOptions = new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        var samples = new List<RerankerSample>();
+        var totalCount = 0;
+        var labelStats = new Dictionary<int, int>();
+
+        try
+        {
+            using var stream = new FileStream(datasetPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            string? line;
+
+            while ((line = await reader.ReadLineAsync()) != null)
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                totalCount++;
+
+                try
+                {
+                    var sample = System.Text.Json.JsonSerializer.Deserialize<RerankerSample>(line, jsonOptions);
+                    if (sample == null)
+                        continue;
+
+                    // Фильтрация
+                    if (!string.IsNullOrWhiteSpace(queryFilter) && 
+                        !sample.QueryText.Contains(queryFilter, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (labelFilter.HasValue && sample.Label != labelFilter.Value)
+                        continue;
+
+                    samples.Add(sample);
+
+                    // Статистика по меткам
+                    if (!labelStats.ContainsKey(sample.Label))
+                        labelStats[sample.Label] = 0;
+                    labelStats[sample.Label]++;
+                }
+                catch
+                {
+                    // Пропускаем битые строки
+                }
+            }
+
+            // Общая статистика
+            Console.WriteLine($"Всего записей в датасете: {totalCount}");
+            Console.WriteLine($"Показано записей: {Math.Min(samples.Count, limit)}");
+            Console.WriteLine();
+            Console.WriteLine("Распределение по оценкам релевантности:");
+            foreach (var kvp in labelStats.OrderBy(x => x.Key))
+            {
+                var labelName = kvp.Key switch
+                {
+                    0 => "Нерелевантно",
+                    1 => "Частично релевантно",
+                    2 => "Релевантно",
+                    _ => $"Неизвестно ({kvp.Key})"
+                };
+                var percentage = totalCount > 0 ? (double)kvp.Value / totalCount * 100 : 0;
+                Console.WriteLine($"  {labelName}: {kvp.Value} ({percentage:F1}%)");
+            }
+            Console.WriteLine();
+            Console.WriteLine(new string('=', 80));
+
+            // Показываем примеры
+            var displaySamples = samples.Take(limit).ToList();
+            for (int i = 0; i < displaySamples.Count; i++)
+            {
+                var sample = displaySamples[i];
+                var labelName = sample.Label switch
+                {
+                    0 => "Нерелевантно",
+                    1 => "Частично",
+                    2 => "Релевантно",
+                    _ => $"Неизвестно ({sample.Label})"
+                };
+
+                Console.WriteLine();
+                Console.WriteLine($"[{i + 1}] Запрос: {sample.QueryText}");
+                Console.WriteLine($"    Документ: {sample.Title}");
+                Console.WriteLine($"    Оценка Qwen: {labelName} (Label: {sample.Label}, Confidence: {sample.Confidence:F2})");
+                Console.WriteLine($"    ElasticScore: {sample.ElasticScore:F3}, Позиция: {sample.Position}");
+                if (!string.IsNullOrWhiteSpace(sample.Category))
+                    Console.WriteLine($"    Категория: {sample.Category}");
+                if (!string.IsNullOrWhiteSpace(sample.Author))
+                    Console.WriteLine($"    Автор: {sample.Author}");
+                if (!string.IsNullOrWhiteSpace(sample.ContentSnippet))
+                {
+                    var snippet = sample.ContentSnippet.Length > 150 
+                        ? sample.ContentSnippet.Substring(0, 150) + "..." 
+                        : sample.ContentSnippet;
+                    Console.WriteLine($"    Фрагмент: {snippet}");
+                }
+                Console.WriteLine(new string('-', 80));
+            }
+
+            if (samples.Count > limit)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"... и ещё {samples.Count - limit} записей. Используйте --limit для показа большего количества.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при чтении датасета: {ex.Message}");
+        }
+
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Автоматическая генерация датасета для обучения с помощью Qwen
+    /// Использует RerankerDatasetBuilder для создания датасета с автоматической разметкой через Qwen
+    /// </summary>
+    static async Task HandleGenerateDatasetCommand(string command, ElasticSearchService elasticSearchService)
+    {
+        var arguments = command.Length > "generate-dataset".Length
+            ? command.Substring("generate-dataset".Length).Trim()
+            : string.Empty;
+        var options = ParseOptionDictionary(SplitArguments(arguments));
+
+        int queryCount = GetIntOption(options, "queries", 100);
+        int docsPerQuery = GetIntOption(options, "docs", 5);
+        string? articlesPath = GetOption(options, "articles");
+        string? datasetPath = GetOption(options, "dataset");
+        string? qwenUrl = GetOption(options, "qwen-url");
+        string? qwenModel = GetOption(options, "qwen-model");
+
+        Console.WriteLine("=== Автоматическая генерация датасета с помощью Qwen ===");
+        Console.WriteLine($"Целевое количество запросов: {queryCount}");
+        Console.WriteLine($"Документов на запрос: {docsPerQuery}");
+        Console.WriteLine();
+
+        try
+        {
+            // Инициализируем Qwen Relevance Labeler
+            Console.WriteLine("Инициализация Qwen Relevance Labeler...");
+            var labeler = await QwenRelevanceLabeler.CreateAsync(qwenUrl, qwenModel);
+            if (labeler == null)
+            {
+                Console.WriteLine("ОШИБКА: Не удалось подключиться к Qwen.");
+                Console.WriteLine("Убедитесь, что Ollama запущен и модель Qwen доступна.");
+                Console.WriteLine($"Попробуйте установить переменные окружения:");
+                Console.WriteLine($"  OLLAMA_BASE_URL=http://localhost:11434");
+                Console.WriteLine($"  QWEN_MODEL=qwen2.5:0.5b");
+                Console.WriteLine("Или используйте параметры командной строки:");
+                Console.WriteLine("  generate-dataset --queries=100 --docs=5 --qwen-url=http://localhost:11434 --qwen-model=qwen2.5:0.5b");
+                Console.WriteLine();
+                return;
+            }
+
+            Console.WriteLine($"Qwen подключен: {labeler.BaseUrl}");
+            Console.WriteLine($"Модель: {labeler.ModelName}");
+            Console.WriteLine();
+
+            // Создаем компоненты для генерации датасета
+            var queryGenerator = new QueryGenerator(articlesPath);
+            var datasetBuilder = new RerankerDatasetBuilder(
+                elasticSearchService,
+                queryGenerator,
+                labeler,
+                datasetPath);
+
+            Console.WriteLine($"Путь к датасету: {datasetBuilder.DatasetPath}");
+            Console.WriteLine();
+
+            // Запускаем генерацию датасета
+            Console.WriteLine("Начинаем генерацию датасета...");
+            Console.WriteLine("Это может занять некоторое время, так как каждый документ оценивается через Qwen.");
+            Console.WriteLine();
+
+            var cancellationTokenSource = new CancellationTokenSource();
+            var cancellationToken = cancellationTokenSource.Token;
+
+            // Позволяем пользователю отменить операцию
+            Console.WriteLine("Нажмите Ctrl+C для отмены операции.");
+            Console.WriteLine();
+
+            try
+            {
+                var report = await datasetBuilder.BuildAsync(queryCount, docsPerQuery, cancellationToken);
+
+                Console.WriteLine();
+                Console.WriteLine("=== Итоги генерации датасета ===");
+                Console.WriteLine($"Новых запросов сгенерировано: {report.GeneratedQueries}");
+                Console.WriteLine($"Новых пар запрос-документ создано: {report.GeneratedPairs}");
+                Console.WriteLine($"Всего запросов в датасете: {report.TotalQueries}");
+                Console.WriteLine($"Всего пар в датасете: {report.TotalPairs}");
+                Console.WriteLine($"Файл датасета: {datasetBuilder.DatasetPath}");
+                Console.WriteLine();
+                Console.WriteLine("Датасет успешно создан с автоматической разметкой через Qwen.");
+                Console.WriteLine("Теперь вы можете использовать команду 'train-reranker' для обучения модели.");
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Генерация датасета отменена пользователем.");
+            }
+            finally
+            {
+                labeler.Dispose();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при генерации датасета: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Детали: {ex.InnerException.Message}");
+            }
+            Console.WriteLine($"Стек вызовов: {ex.StackTrace}");
+        }
+
+        Console.WriteLine();
+    }
+
+    /// <summary>
     /// Очищает все данные оценки
     /// </summary>
     static async Task HandleClearEvaluationCommand()
@@ -1710,8 +2674,11 @@ class Program
         Console.WriteLine("  show-metrics - показать метрики качества поиска");
         Console.WriteLine("  save-report <файл.txt> - сохранить отчет в файл");
         Console.WriteLine("  export-evaluation <файл.csv> - экспорт данных в CSV");
-        Console.WriteLine("  build-reranker [--queries --docs] - собрать датасет через Qwen");
-        Console.WriteLine("  train-reranker [--dataset --output] - обучить reranker и подключить его");
+        Console.WriteLine("  build-reranker [--auto --queries --docs] - автоматическая генерация датасета через Qwen (1000 запросов)");
+        Console.WriteLine("  build-reranker --interactive [--queries 1000 --docs 5 --ai] - генерация запросов + ручная оценка");
+        Console.WriteLine("  build-finetuning [--min-score --dataset] - подготовить датасет для fine-tuning Qwen из оценок пользователей");
+        Console.WriteLine("  train-reranker [--dataset --output] - обучить ML reranker (LightGBM) и подключить его");
+        Console.WriteLine("  view-dataset [--limit --query --label --dataset] - просмотр результатов оценки");
         Console.WriteLine();
         Console.WriteLine("УПРАВЛЕНИЕ ДАННЫМИ:");
         Console.WriteLine("  backup - создать бэкап индекса");
